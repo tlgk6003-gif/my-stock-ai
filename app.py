@@ -193,7 +193,6 @@ def get_naver_financial_data(code_num):
     pass
   return res
 
-# 서버 차단 시 앱 다운을 막고 안전한 가짜(Dummy) 차트 데이터를 생성해주는 방어 로직
 def generate_fallback_history():
   dates = pd.date_range(end=datetime.datetime.today(), periods=250, freq='B')
   np.random.seed(42)
