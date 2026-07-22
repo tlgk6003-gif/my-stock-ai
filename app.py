@@ -30,7 +30,7 @@ if st.button("🚀 실시간 정밀 분석 시작", type="primary"):
         with st.spinner(f"'{stock_name}' 종목 정밀 분석 보고서 생성 중..."):
             try:
                 genai.configure(api_key=api_key)
-               model = genai.GenerativeModel("gemini-1.5-flash-8b")
+                model = genai.GenerativeModel("gemini-1.5-flash-8b")
 
                 prompt = f"""
                 너는 KOSPI/KOSDAQ 분석 전문 트레이더이자 리서치 애널리스트야.
