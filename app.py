@@ -6,7 +6,6 @@ import urllib.parse
 import xml.etree.ElementTree as ET
 from deep_translator import GoogleTranslator
 import pandas as pd
-import pandas_datareader as pdr  # 추가: KRX 전종목 동적 연동용
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import requests
@@ -14,9 +13,9 @@ import streamlit as st
 import yfinance as yf
 
 # =============================================================================
-# 🔥 [수익화 설정] 본인의 쿠팡 파트너스 링크를 아래 큰따옴표 안에 넣어주세요.
+# 🔥 [수익화 설정] 쿠팡 파트너스 링크
 # =============================================================================
-COUPANG_LINK = "https://link.coupang.com/a/fAS0LGAFK8"  # <--- 본인 파트너스 단축 URL 넣기
+COUPANG_LINK = "https://link.coupang.com/a/fAS0LGAFK8"
 
 # Firebase 실시간 데이터베이스 URL
 FIREBASE_URL = "https://mystockcommunity-dd967-default-rtdb.firebaseio.com/"
@@ -339,7 +338,7 @@ with st.sidebar:
 
   st.markdown("---")
   st.markdown(
-      "<div style='font-size:0.8rem; color:#8b949e;'>⚡ AI 주식분석 플랫폼 v3.0<br>© 2026 Stock Community</div>",
+      "<div style='font-size:0.8rem; color:#8b949e;'>⚡ AI 주식분석 플랫폼 v3.1<br>© 2026 Stock Community</div>",
       unsafe_allow_html=True,
   )
 
@@ -360,7 +359,7 @@ tab_analysis, tab_board, tab_mypage = st.tabs(
 
 
 # -----------------------------------------------------------------------------
-# 2. KRX 전 종목 자동 연동 및 검색 엔진 (코스피/코스닥 전체 완벽 커버)
+# 2. KRX 전 종목 자동 연동 및 검색 엔진 (의존성 오류 원천 차단)
 # -----------------------------------------------------------------------------
 @st.cache_data(ttl=86400)
 def get_krx_stock_master():
@@ -994,7 +993,6 @@ with tab_board:
   else:
     with st.expander("✍️ 새 게시글 작성하기 (클릭하여 열기)", expanded=False):
       with st.form("write_post_form", clear_on_submit=True):
-        # 관련종목/분류 선택에서 자유토론만 남기고 모두 제거
         category = "자유토론"
         st.markdown(
             f"<div style='font-size:0.9rem; color:#8b949e; margin-bottom:10px;'>📌 분류: <b style='color:#38bdf8;'>{category}</b></div>",
