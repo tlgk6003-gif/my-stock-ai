@@ -1,3 +1,4 @@
+
 import datetime
 import hashlib
 import json
@@ -179,7 +180,20 @@ def get_stock_code(user_input):
   if cleaned.isdigit() and len(cleaned) == 6:
     return cleaned
   
-  # 정확한 기본 매핑 사전 확장
+  # 네이버 증권 자동 검색 API를 통한 정확한 종목 코드 추출
+  try:
+    encoded_query = urllib.parse.quote(cleaned)
+    url = f"https://ac.finance.naver.com/ac?q={encoded_query}&target=stock"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    res = requests.get(url, headers=headers, timeout=3)
+    if res.status_code == 200:
+      items = res.json().get("items", [])
+      if items and len(items[0]) > 0:
+        return items[0][0][0] # 검색된 정확한 6자리 코드 반환
+  except Exception:
+    pass
+
+  # 수동 폴백 매핑
   fallback_map = {
       "삼성전자": "005930",
       "카카오": "035720",
@@ -192,59 +206,13 @@ def get_stock_code(user_input):
       "셀트리온": "068270",
       "기아": "000270"
   }
-  if cleaned in fallback_map:
-    return fallback_map[cleaned]
-
-  # 네이버 증권 자동 검색 연동 (정확한 종목 코드 추출)
-  try:
-    encoded_query = urllib.parse.quote(cleaned)
-    url = f"https://ac.finance.naver.com/ac?q={encoded_query}&target=stock"
-    headers = {"User-Agent": "Mozilla/5.0"}
-    res = requests.get(url, headers=headers, timeout=3)
-    if res.status_code == 200:
-      items = res.json().get("items", [])
-      if items and len(items[0]) > 0:
-        # 첫 번째 검색 결과의 코드 반환
-        return items[0][0][0]
-  except Exception:
-    pass
-
-  return "005930" # 최종 실패 시 삼성전자
+  return fallback_map.get(cleaned, "005930")
 
 @st.cache_data(ttl=1800)
 def fetch_stock_market_data(code):
+  # 1순위: 네이버 금융 API를 활용한 정확한 일별 시세 데이터 조회
   try:
-    ticker = f"{code}.KS" if code.startswith("0") else f"{code}.KQ"
-    period1 = int((datetime.datetime.today() - datetime.timedelta(days=365)).timestamp())
-    period2 = int(datetime.datetime.today().timestamp())
-    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?period1={period1}&period2={period2}&interval=1d"
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-    
-    res = requests.get(url, headers=headers, timeout=5)
-    if res.status_code == 200:
-      data = res.json()
-      result = data['chart']['result'][0]
-      timestamps = result['timestamp']
-      quote = result['indicators']['quote'][0]
-      
-      df = pd.DataFrame({
-          'Date': pd.to_datetime(timestamps, unit='s'),
-          'Open': quote.get('open'),
-          'High': quote.get('high'),
-          'Low': quote.get('low'),
-          'Close': quote.get('close'),
-          'Volume': quote.get('volume')
-      })
-      df.set_index('Date', inplace=True)
-      df = df.dropna()
-      if not df.empty:
-        return df
-  except Exception:
-    pass
-
-  # 백업: 네이버 API
-  try:
-    url = f"https://fchart.stock.naver.com/sise.nhn?symbol={code}&timeframe=day&count=100&type=json"
+    url = f"https://fchart.stock.naver.com/sise.nhn?symbol={code}&timeframe=day&count=120&type=json"
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
     res = requests.get(url, headers=headers, timeout=5)
     if res.status_code == 200:
@@ -263,7 +231,35 @@ def fetch_stock_market_data(code):
           })
         df = pd.DataFrame(chart_rows)
         df.set_index("Date", inplace=True)
-        return df.dropna()
+        df = df.dropna()
+        if not df.empty:
+          return df
+  except Exception:
+    pass
+
+  # 2순위: 야후 파이낸스 백업
+  try:
+    ticker = f"{code}.KS" if code.startswith("0") else f"{code}.KQ"
+    period1 = int((datetime.datetime.today() - datetime.timedelta(days=365)).timestamp())
+    period2 = int(datetime.datetime.today().timestamp())
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?period1={period1}&period2={period2}&interval=1d"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    res = requests.get(url, headers=headers, timeout=5)
+    if res.status_code == 200:
+      data = res.json()
+      result = data['chart']['result'][0]
+      timestamps = result['timestamp']
+      quote = result['indicators']['quote'][0]
+      df = pd.DataFrame({
+          'Date': pd.to_datetime(timestamps, unit='s'),
+          'Open': quote.get('open'),
+          'High': quote.get('high'),
+          'Low': quote.get('low'),
+          'Close': quote.get('close'),
+          'Volume': quote.get('volume')
+      })
+      df.set_index('Date', inplace=True)
+      return df.dropna()
   except Exception:
     pass
 
@@ -300,12 +296,12 @@ with tab_analysis:
       </div>
       """, unsafe_allow_html=True)
 
-      with st.spinner("실시간 시장 데이터 수집 및 AI 기술적 지표 계산 중..."):
+      with st.spinner(f"[{stock_input}] 실시간 시장 데이터 수집 및 AI 기술적 지표 계산 중..."):
         df = fetch_stock_market_data(code)
         fin_info = get_financial_info(code, stock_input)
 
       if df.empty or len(df) < 5:
-        st.error("⚠️ 데이터를 불러오는 중 지연이 발생했습니다. 올바른 종목명인지 다시 확인해 주세요.")
+        st.error(f"⚠️ [{stock_input}]에 대한 데이터를 불러오지 못했습니다. 올바른 종목명인지 다시 확인해 주세요.")
       else:
         current_price = int(df["Close"].iloc[-1])
         prev_price = int(df["Close"].iloc[-2])
