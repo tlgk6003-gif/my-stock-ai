@@ -7,7 +7,6 @@ import urllib.parse
 import xml.etree.ElementTree as ET
 from deep_translator import GoogleTranslator
 import pandas as pd
-import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import requests
@@ -179,10 +178,10 @@ tab_analysis, tab_board, tab_mypage = st.tabs(["📊 AI 종목 기술적 진단"
 def get_naver_financial_data(code_num):
   url = f"https://finance.naver.com/item/main.naver?code={code_num}"
   headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
-  res = {"per": "15.4배", "forward_per": "12.1배", "pbr": "1.4배", "roe": "8.5%"}
+  res = {"per": "-", "forward_per": "-", "pbr": "-", "roe": "-"}
   try:
-    time.sleep(0.3)
-    resp = requests.get(url, headers=headers, timeout=3)
+    time.sleep(0.5)
+    resp = requests.get(url, headers=headers, timeout=5)
     if resp.status_code == 200:
       text = resp.text
       per_match = re.search(r'<em id="_per">([\d\.\-]+)</em>', text)
@@ -193,30 +192,19 @@ def get_naver_financial_data(code_num):
     pass
   return res
 
-def generate_fallback_history():
-  dates = pd.date_range(end=datetime.datetime.today(), periods=250, freq='B')
-  np.random.seed(42)
-  walk = np.random.normal(loc=0.1, scale=1.5, size=250).cumsum()
-  base_price = 70000 + walk * 500
-  df = pd.DataFrame({
-      'Open': base_price - np.random.uniform(0, 500, 250),
-      'High': base_price + np.random.uniform(200, 1000, 250),
-      'Low': base_price - np.random.uniform(200, 1000, 250),
-      'Close': base_price,
-      'Volume': np.random.randint(100000, 1000000, 250)
-  }, index=dates)
-  return df, {"longBusinessSummary": "본 기업은 해당 산업 분야에서 안정적인 시장 점유율을 확보하고 있으며, 지속적인 기술 혁신을 통해 성장 동력을 강화하고 있습니다."}
-
 @st.cache_data(ttl=3600)
 def fetch_stock_history(ticker_symbol):
+  time.sleep(0.5)
   try:
     stock = yf.Ticker(ticker_symbol)
     df = stock.history(period="1y")
-    if df.empty or len(df) < 5:
-      return generate_fallback_history()
+    if df.empty:
+      alt = ticker_symbol.replace(".KS", ".KQ") if ".KS" in ticker_symbol else ticker_symbol.replace(".KQ", ".KS")
+      stock = yf.Ticker(alt)
+      df = stock.history(period="1y")
     return df, stock.info
   except Exception:
-    return generate_fallback_history()
+    return pd.DataFrame(), {}
 
 def get_ticker_symbol_and_code(user_input):
   cleaned = user_input.strip()
@@ -269,40 +257,42 @@ with tab_analysis:
         with st.spinner("데이터 분석 중..."):
           df, info = fetch_stock_history(ticker_symbol)
 
-        current_price = int(df["Close"].iloc[-1])
-        prev_price = int(df["Close"].iloc[-2])
-        price_change = current_price - prev_price
-        pct_change = (price_change / prev_price) * 100
+        if df.empty or len(df) < 5:
+          st.error("⚠️ 외부 서버(야후 파이낸스/네이버)에서 요청을 일시적으로 제한(Rate Limit)했거나 데이터를 찾을 수 없습니다. 1~2분 뒤에 다시 시도해 주세요.")
+        else:
+          current_price = int(df["Close"].iloc[-1])
+          prev_price = int(df["Close"].iloc[-2])
+          price_change = current_price - prev_price
+          pct_change = (price_change / prev_price) * 100
 
-        df["MA20"] = df["Close"].rolling(window=20).mean()
-        df["MA60"] = df["Close"].rolling(window=60).mean()
-        
-        delta = df["Close"].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        current_rsi = round(float(100 - (100 / (1 + (gain / loss).iloc[-1]))), 1)
+          df["MA20"] = df["Close"].rolling(window=20).mean()
+          df["MA60"] = df["Close"].rolling(window=60).mean()
+          
+          delta = df["Close"].diff()
+          gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+          loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+          current_rsi = round(float(100 - (100 / (1 + (gain / loss).iloc[-1]))), 1)
 
-        naver_data = get_naver_financial_data(pure_code)
-        summary_raw = info.get("longBusinessSummary", "요약 정보 없음")
-        summary = translate_to_ko(summary_raw)
+          naver_data = get_naver_financial_data(pure_code)
+          summary = translate_to_ko(info.get("longBusinessSummary", ""))
 
-        c1, c2, c3, c4 = st.columns(4)
-        c1.markdown(f'<div class="metric-card"><div class="metric-title">실시간 주가</div><div class="metric-value">{current_price:,}원 ({pct_change:+.2f}%)</div></div>', unsafe_allow_html=True)
-        c2.markdown(f'<div class="metric-card"><div class="metric-title">RSI</div><div class="metric-value">{current_rsi}</div></div>', unsafe_allow_html=True)
-        c3.markdown(f'<div class="metric-card"><div class="metric-title">PER</div><div class="metric-value">{naver_data["per"]}</div></div>', unsafe_allow_html=True)
-        c4.markdown(f'<div class="metric-card"><div class="metric-title">PBR</div><div class="metric-value">{naver_data["pbr"]}</div></div>', unsafe_allow_html=True)
+          c1, c2, c3, c4 = st.columns(4)
+          c1.markdown(f'<div class="metric-card"><div class="metric-title">실시간 주가</div><div class="metric-value">{current_price:,}원 ({pct_change:+.2f}%)</div></div>', unsafe_allow_html=True)
+          c2.markdown(f'<div class="metric-card"><div class="metric-title">RSI</div><div class="metric-value">{current_rsi}</div></div>', unsafe_allow_html=True)
+          c3.markdown(f'<div class="metric-card"><div class="metric-title">PER</div><div class="metric-value">{naver_data["per"]}</div></div>', unsafe_allow_html=True)
+          c4.markdown(f'<div class="metric-card"><div class="metric-title">PBR</div><div class="metric-value">{naver_data["pbr"]}</div></div>', unsafe_allow_html=True)
 
-        st.markdown("<div class='section-header'>테크니컬 차트</div>", unsafe_allow_html=True)
-        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25])
-        fig.add_trace(go.Candlestick(x=df.index, open=df["Open"], high=df["High"], low=df["Low"], close=df["Close"], name="주가"), row=1, col=1)
-        fig.add_trace(go.Bar(x=df.index, y=df["Volume"], name="거래량"), row=2, col=1)
-        fig.update_layout(template="plotly_dark", height=450, margin=dict(l=10, r=10, t=10, b=10), xaxis_rangeslider_visible=False)
-        st.plotly_chart(fig, use_container_width=True)
+          st.markdown("<div class='section-header'>테크니컬 차트</div>", unsafe_allow_html=True)
+          fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25])
+          fig.add_trace(go.Candlestick(x=df.index, open=df["Open"], high=df["High"], low=df["Low"], close=df["Close"], name="주가"), row=1, col=1)
+          fig.add_trace(go.Bar(x=df.index, y=df["Volume"], name="거래량"), row=2, col=1)
+          fig.update_layout(template="plotly_dark", height=450, margin=dict(l=10, r=10, t=10, b=10), xaxis_rangeslider_visible=False)
+          st.plotly_chart(fig, use_container_width=True)
 
-        st.markdown("<div class='section-header'>기업 개요</div>", unsafe_allow_html=True)
-        st.markdown(f'<div class="custom-card"><p>{summary}</p></div>', unsafe_allow_html=True)
-        
-        render_kakao_adfit()
+          st.markdown("<div class='section-header'>기업 개요</div>", unsafe_allow_html=True)
+          st.markdown(f'<div class="custom-card"><p>{summary}</p></div>', unsafe_allow_html=True)
+          
+          render_kakao_adfit()
 
       except Exception as e:
         st.error(f"⚠️ 데이터 처리 중 예외가 발생했습니다: {e}")
