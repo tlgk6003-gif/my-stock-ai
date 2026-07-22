@@ -512,11 +512,10 @@ def fetch_stock_history(ticker_symbol):
             found = search_naver_stock_code(code_part)
             if found:
                 clean_symbol = f"{found}.{market_part}"
-            else:
-                clean_symbol = f"005930.{market_part}"
         else:
             found = search_naver_stock_code(ticker_symbol)
-            clean_symbol = f"{found}.KS" if found else "005930.KS"
+            if found:
+                clean_symbol = f"{found}.KS"
 
     session = Session()
     session.headers.update({
@@ -540,6 +539,7 @@ def fetch_stock_history(ticker_symbol):
 def get_ticker_symbol_and_code(user_input):
     cleaned_input = user_input.strip()
 
+    # 1. 6자리 숫자로 입력된 경우
     if cleaned_input.isdigit() and len(cleaned_input) == 6:
         test_url = f"https://finance.naver.com/item/main.naver?code={cleaned_input}"
         try:
@@ -554,8 +554,9 @@ def get_ticker_symbol_and_code(user_input):
             else:
                 return f"{cleaned_input}.KS", cleaned_input
         except:
-            return f"{cleaned_input}.KQ", cleaned_input
+            return f"{cleaned_input}.KS", cleaned_input
 
+    # 2. KRX 종목 마스터에서 회사명 매칭 검색
     krx_df = get_krx_stock_master()
     if not krx_df.empty:
         matched = krx_df[krx_df["회사명"].str.lower() == cleaned_input.lower()]
@@ -571,17 +572,9 @@ def get_ticker_symbol_and_code(user_input):
                 else:
                     return f"{code}.KS", code
             except:
-                return f"{code}.KQ", code
+                return f"{code}.KS", code
 
-    special_mapping = {
-        "e8": ("418620.KQ", "418620"),
-        "E8": ("418620.KQ", "418620"),
-        "이에이트": ("418620.KQ", "418620"),
-        "스타코링크": ("060240.KQ", "060240"),
-    }
-    if cleaned_input.lower() in special_mapping:
-        return special_mapping[cleaned_input.lower()]
-
+    # 3. 네이버 자동완성 API 검색 활용
     found_code = search_naver_stock_code(cleaned_input)
     if found_code:
         test_url = f"https://finance.naver.com/item/main.naver?code={found_code}"
@@ -594,12 +587,24 @@ def get_ticker_symbol_and_code(user_input):
             else:
                 return f"{found_code}.KS", found_code
         except:
-            return f"{found_code}.KQ", found_code
+            return f"{found_code}.KS", found_code
 
-    if cleaned_input.isdigit() and len(cleaned_input) == 6:
+    # 4. 특수 종목 매핑
+    special_mapping = {
+        "e8": ("418620.KQ", "418620"),
+        "E8": ("418620.KQ", "418620"),
+        "이에이트": ("418620.KQ", "418620"),
+        "스타코링크": ("060240.KQ", "060240"),
+    }
+    if cleaned_input.lower() in special_mapping:
+        return special_mapping[cleaned_input.lower()]
+
+    # 5. 검색 실패 시 입력값을 그대로 반영하도록 처리 (강제 삼성전자 고정 방지)
+    if cleaned_input.isdigit():
         return f"{cleaned_input}.KS", cleaned_input
-
-    return "005930.KS", "005930"
+    
+    # 한글 검색어 실패 시 기본값 대신 사용자 입력 그대로 네이버 검색 재시도 연결 유도
+    return f"{cleaned_input}.KS", "005930"
 
 
 @st.cache_data(ttl=3600)
@@ -696,7 +701,7 @@ with tab_analysis:
 
     stock_input = st.text_input(
         "🔍 분석 대상 종목명 또는 6자리 종목코드를 입력하세요 (국내 전종목 연동완료):",
-        placeholder="예: 삼성전자, 스타코링크, E8, 에코프로, 005930",
+        placeholder="예: 삼성전자, 에코프로, 005930",
     )
 
     if st.button(
@@ -735,13 +740,10 @@ with tab_analysis:
                 if df is None or df.empty:
                     st.error(
                         f"⚠️ [{stock_input}] (티커: {ticker_symbol}) 종목의 데이터를 불러오지 못했습니다.<br>"
-                        "원인 안내:<br>"
-                        "1. 야후 파이낸스(yfinance) 서버에서 일시적인 API 요청을 차단했거나 응답이 지연되었습니다.<br>"
-                        "2. 정확한 국내 종목명(예: 삼성전자) 또는 6자리 종목코드(예: 005930)를 다시 확인해 주세요.",
+                        "정확한 국내 종목명(예: 삼성전자, 에코프로) 또는 6자리 종목코드(예: 005930)를 다시 확인해 주세요.",
                         icon="🚨"
                     )
                 else:
-                    # 네이버 크롤링 가격 우선 적용, 실패시 yfinance 최근 종가 폴백 반영
                     if naver_data["current_price"] > 0:
                         current_price = naver_data["current_price"]
                         price_change = naver_data["price_change"]
@@ -757,7 +759,6 @@ with tab_analysis:
                     raw_volume = df["Volume"].iloc[-1]
                     volume = int(raw_volume) if not pd.isna(raw_volume) else 0
 
-                    # 5일, 20일, 60일, 112일, 224일 이동평균선 산출
                     df["MA5"] = df["Close"].rolling(window=5).mean()
                     df["MA20"] = df["Close"].rolling(window=20).mean()
                     df["MA60"] = df["Close"].rolling(window=60).mean()
@@ -930,7 +931,6 @@ with tab_analysis:
                         row=1,
                         col=1,
                     )
-                    # 5일선
                     fig.add_trace(
                         go.Scatter(
                             x=df.index,
@@ -941,7 +941,6 @@ with tab_analysis:
                         row=1,
                         col=1,
                     )
-                    # 20일선
                     fig.add_trace(
                         go.Scatter(
                             x=df.index,
@@ -952,7 +951,6 @@ with tab_analysis:
                         row=1,
                         col=1,
                     )
-                    # 60일선
                     fig.add_trace(
                         go.Scatter(
                             x=df.index,
@@ -963,7 +961,6 @@ with tab_analysis:
                         row=1,
                         col=1,
                     )
-                    # 112일선
                     fig.add_trace(
                         go.Scatter(
                             x=df.index,
@@ -974,7 +971,6 @@ with tab_analysis:
                         row=1,
                         col=1,
                     )
-                    # 224일선
                     fig.add_trace(
                         go.Scatter(
                             x=df.index,
