@@ -10,8 +10,9 @@ st.caption(
     "이평선(5/20/60/112/224일) 기반 차트 지도, 3자 종합 토론, 실전 모의투자 세팅 제공"
 )
 
-# API 키 설정
-api_key = "gsk_AQ.Ab8RN6JKlSVT02qMX1XmCnX7sY8brDYcWfcmj8ZcSM5sl047xA"
+# API 키 직접 지정 (공백 자동 제거 처리)
+MY_GROQ_KEY = "gsk_AQ.Ab8RN6JKlSVT02qMX1XmCnX7sY8brDYcWfcmj8ZcSM5sl047xA"
+api_key = MY_GROQ_KEY.strip() if MY_GROQ_KEY else ""
 
 stock_name = st.text_input(
     "분석할 종목명 또는 종목코드를 입력하세요:",
@@ -19,13 +20,14 @@ stock_name = st.text_input(
 )
 
 if st.button("🚀 실시간 정밀 분석 시작", type="primary"):
-    if not api_key:
-        st.error("좌측 사이드바에 Groq API Key를 입력해주세요!")
+    if not api_key or api_key == "gsk_여기에_새로_발급받은_키_붙여넣기":
+        st.error("app.py 파일의 14번째 줄에 정확한 Groq API Key를 입력해 주세요!")
     elif not stock_name:
         st.warning("분석할 종목명을 입력해주세요.")
     else:
         with st.spinner(f"'{stock_name}' 종목 정밀 분석 보고서 생성 중..."):
             try:
+                # Groq 클라이언트 생성
                 client = Groq(api_key=api_key)
 
                 prompt = f"""
