@@ -1,4 +1,5 @@
 import datetime
+import re
 import urllib.parse
 import xml.etree.ElementTree as ET
 import pandas as pd
@@ -26,21 +27,23 @@ st.markdown(
         background: linear-gradient(135deg, #1E232A 0%, #16191E 100%);
         border: 1px solid #2D333B;
         border-radius: 12px;
-        padding: 18px 22px;
+        padding: 16px 18px;
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
         margin-bottom: 12px;
+        min-height: 100px;
     }
     .metric-title {
         color: #8B949E;
-        font-size: 0.85rem;
+        font-size: 0.8rem;
         font-weight: 600;
         margin-bottom: 6px;
         text-transform: uppercase;
     }
     .metric-value {
         color: #F0F6FC;
-        font-size: 1.3rem;
+        font-size: 1.15rem;
         font-weight: 700;
+        line-height: 1.3;
     }
 
     .custom-card {
@@ -57,6 +60,17 @@ st.markdown(
     .custom-card.bear { border-left-color: #3182CE; }
     .custom-card.quant { border-left-color: #38A169; }
     .custom-card.warn { border-left-color: #DD6B20; }
+
+    .disclaimer-box {
+        background-color: #161B22;
+        border: 1px solid #444C56;
+        border-radius: 8px;
+        padding: 14px 18px;
+        margin: 15px 0;
+        font-size: 0.82rem;
+        color: #8B949E;
+        line-height: 1.5;
+    }
 
     .ad-banner {
         background: linear-gradient(90deg, #1F2937 0%, #111827 100%);
@@ -105,11 +119,58 @@ st.markdown(
 )
 
 st.title("📈 AI 정밀분석기")
-st.caption("기업 개요, 차트, 선행/Trailing PER 재무분석, 3대 시나리오, 실시간 뉴스 리포트")
+st.caption(
+    "네이버 금융 실시간 재무연동 · 차트 · 선행/Trailing PER · 3대 시나리오 · 실시간"
+    " 뉴스 리포트"
+)
+
+# 상단 법적 고지 안내
+st.markdown(
+    """
+<div class="disclaimer-box">
+    <b>⚠️ 투자 유의사항 및 법적 고지 (Disclaimer)</b><br>
+    본 서비스에서 제공하는 모든 데이터, 분석 결과, 시나리오 및 투자 비중 계산은 단순 참고용 정보이며, 특정 종목에 대한 투자 권유나 추천이 아닙니다. 
+    제공되는 정보는 실시간 시세 및 기술적 지표를 바탕으로 산출되나 데이터의 완전성과 정확성을 보장하지 않으며, **모든 투자 판단과 이에 따른 최종 책임은 전적으로 투자자 본인에게 있습니다.**
+</div>
+""",
+    unsafe_allow_html=True,
+)
+
 
 # -----------------------------------------------------------------------------
-# 2. 유틸리티 함수 및 PER/PBR 보완 로직
+# 2. 유틸리티 함수 & 네이버 증권 데이터 크롤링
 # -----------------------------------------------------------------------------
+def get_naver_financial_data(code_num):
+  url = f"https://finance.naver.com/item/main.naver?code={code_num}"
+  headers = {
+      "User-Agent": (
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+      )
+  }
+  res = {"per": "N/A", "forward_per": "N/A", "pbr": "N/A", "roe": "N/A"}
+  try:
+    resp = requests.get(url, headers=headers, timeout=5)
+    text = resp.text
+
+    per_match = re.search(
+        r'<em id="_per">([\d\.\-]+)</em>', text
+    ) or re.search(r'PER\s*<em[^>]*>([\d\.\-]+)</em>', text)
+    if per_match and per_match.group(1) != "-":
+      res["per"] = f"{per_match.group(1)}배"
+
+    pbr_match = re.search(r'<em id="_pbr">([\d\.\-]+)</em>', text)
+    if pbr_match and pbr_match.group(1) != "-":
+      res["pbr"] = f"{pbr_match.group(1)}배"
+
+    fper_match = re.search(r'<em id="_cper">([\d\.\-]+)</em>', text)
+    if fper_match and fper_match.group(1) != "-":
+      res["forward_per"] = f"{fper_match.group(1)}배"
+
+  except Exception:
+    pass
+  return res
+
+
 def fetch_realtime_news(query_term):
   encoded_query = urllib.parse.quote(query_term)
   rss_url = f"https://news.google.com/rss/search?q={encoded_query}&hl=ko&gl=KR&ceid=KR:ko"
@@ -155,30 +216,25 @@ stock_input = st.text_input(
 )
 
 
-def get_ticker_symbol(user_input):
+def get_ticker_symbol_and_code(user_input):
   user_input = user_input.strip()
   if user_input.isdigit() and len(user_input) == 6:
-    return f"{user_input}.KS"
+    return f"{user_input}.KS", user_input
   mapping = {
-      "삼성전자": "005930.KS",
-      "SK하이닉스": "000660.KS",
-      "대원전선": "006340.KS",
-      "한화오션": "042660.KS",
-      "LG에너지솔루션": "373220.KS",
-      "현대차": "005380.KS",
-      "POSCO홀딩스": "005490.KS",
-      "에코프로비엠": "247540.KQ",
-      "에코프로": "086520.KQ",
-      "알테오젠": "196170.KQ",
-      "HLB": "028300.KQ",
+      "삼성전자": "005930",
+      "SK하이닉스": "000660",
+      "대원전선": "006340",
+      "한화오션": "042660",
+      "LG에너지솔루션": "373220",
+      "현대차": "005380",
+      "POSCO홀딩스": "005490",
+      "에코프로비엠": "247540",
+      "에코프로": "086520",
+      "알테오젠": "196170",
+      "HLB": "028300",
   }
-  return mapping.get(user_input, f"{user_input}.KS")
-
-
-def format_valuation(val, suffix="배"):
-  if isinstance(val, (int, float)) and not pd.isna(val) and val > 0:
-    return f"{round(val, 2)}{suffix}"
-  return "N/A (적자 또는 정보없음)"
+  code = mapping.get(user_input, user_input)
+  return f"{code}.KS", code
 
 
 # -----------------------------------------------------------------------------
@@ -188,7 +244,7 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
   if not stock_input:
     st.warning("⚠️ 분석할 종목명이나 종목코드를 입력해주세요.")
   else:
-    ticker_symbol = get_ticker_symbol(stock_input)
+    ticker_symbol, pure_code = get_ticker_symbol_and_code(stock_input)
 
     with st.spinner(f"'{stock_input}' 정밀 분석 리포트를 작성하는 중..."):
       try:
@@ -206,7 +262,6 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
               " 입력해주세요."
           )
         else:
-          # 지표 계산
           current_price = int(df["Close"].iloc[-1])
           prev_price = int(df["Close"].iloc[-2])
           price_change = current_price - prev_price
@@ -217,7 +272,6 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
           df["MA60"] = df["Close"].rolling(window=60).mean()
           df["MA120"] = df["Close"].rolling(window=120).mean()
 
-          # RSI
           delta = df["Close"].diff()
           gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
           loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
@@ -227,38 +281,50 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
               round(df["RSI"].iloc[-1], 1) if not pd.isna(df["RSI"].iloc[-1]) else 50.0
           )
 
-          # PER, PBR, 선행 PER 보완 로직
+          naver_data = get_naver_financial_data(pure_code)
+
           info = stock.info
           sector = info.get("sector", "주요 성장 산업")
           summary = info.get("longBusinessSummary", "해당 기업의 주요 사업 영역")
 
-          trailing_per = info.get("trailingPE") or info.get("peRatio")
-          forward_per = info.get("forwardPE")
-          pbr = info.get("priceToBook")
-          roe = info.get("returnOnEquity")
+          yf_per = info.get("trailingPE")
+          yf_pbr = info.get("priceToBook")
+          yf_roe = info.get("returnOnEquity")
 
-          formatted_trailing_per = format_valuation(trailing_per)
-          formatted_forward_per = format_valuation(forward_per)
-          formatted_pbr = format_valuation(pbr)
+          final_per = (
+              naver_data["per"]
+              if naver_data["per"] != "N/A"
+              else (
+                  f"{round(yf_per, 2)}배"
+                  if isinstance(yf_per, (int, float))
+                  else "N/A"
+              )
+          )
+          final_fper = naver_data["forward_per"]
+          final_pbr = (
+              naver_data["pbr"]
+              if naver_data["pbr"] != "N/A"
+              else (
+                  f"{round(yf_pbr, 2)}배"
+                  if isinstance(yf_pbr, (int, float))
+                  else "N/A"
+              )
+          )
 
-          formatted_roe = "N/A"
-          if isinstance(roe, (int, float)) and not pd.isna(roe):
-            formatted_roe = f"{round(roe * 100, 2)}%"
+          final_roe = "N/A"
+          if isinstance(yf_roe, (int, float)) and not pd.isna(yf_roe):
+            final_roe = f"{round(yf_roe * 100, 2)}%"
 
-          # 가격 가이드
           buy_1 = current_price
           buy_2 = int(current_price * 0.96)
           target_price = int(current_price * 1.15)
           stop_loss = int(current_price * 0.94)
 
-          # -----------------------------------------------------------------------------
-          # 📢 광고 영역 1: 상단 스폰서 광고 배너 (구글 애드센스 HTML 코드 삽입 가능)
-          # -----------------------------------------------------------------------------
+          # 📢 스폰서 광고 영역 1
           st.markdown(
               """
           <div class="ad-banner">
-              <span style="font-size:0.8rem; color:#6B7280; display:block; margin-bottom:4px;">SPONSORED ADVERTISEMENT</span>
-              <!-- 구글 애드센스 ins 코드를 아래에 넣거나 쿠팡 파트너스 배너 링크를 배치할 수 있습니다 -->
+              <span style="font-size:0.75rem; color:#6B7280; display:block; margin-bottom:4px;">SPONSORED ADVERTISEMENT</span>
               <a href="https://link.coupang.com" target="_blank" style="color:#60A5FA; font-weight:bold; text-decoration:none;">
                   📢 [추천] 증권사 수수료 무료 혜택 및 실시간 프리미엄 주식 정보 확인하기 ➔
               </a>
@@ -267,9 +333,7 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
               unsafe_allow_html=True,
           )
 
-          # -----------------------------------------------------------------------------
           # 4. 상단 핵심 지표
-          # -----------------------------------------------------------------------------
           c1, c2, c3, c4, c5 = st.columns(5)
           color_style = (
               "#E53E3E"
@@ -280,35 +344,31 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
 
           c1.markdown(
               f"""<div class="metric-card"><div class="metric-title">실시간 주가</div>
-          <div class="metric-value" style="color:{color_style};">{current_price:,}원 <span style="font-size:0.8rem;">({sign}{pct_change:.2f}%)</span></div></div>""",
+          <div class="metric-value" style="color:{color_style};">{current_price:,}원 <span style="font-size:0.75rem;">({sign}{pct_change:.2f}%)</span></div></div>""",
               unsafe_allow_html=True,
           )
           c2.markdown(
               f"""<div class="metric-card"><div class="metric-title">RSI (14일)</div>
-          <div class="metric-value">{current_rsi} <span style="font-size:0.8rem; color:#8B949E;">({"과열" if current_rsi>70 else ("중립" if current_rsi>30 else "침체")})</span></div></div>""",
+          <div class="metric-value">{current_rsi} <span style="font-size:0.75rem; color:#8B949E;">({"과열" if current_rsi>70 else ("중립" if current_rsi>30 else "침체")})</span></div></div>""",
               unsafe_allow_html=True,
           )
           c3.markdown(
-              f"""<div class="metric-card"><div class="metric-title">선행 PER / Trailing PER</div>
-          <div class="metric-value" style="font-size:1.05rem;">{formatted_forward_per} / {formatted_trailing_per}</div></div>""",
+              f"""<div class="metric-card"><div class="metric-title">선행 PER / PER</div>
+          <div class="metric-value">{final_fper} / {final_per}</div></div>""",
               unsafe_allow_html=True,
           )
           c4.markdown(
               f"""<div class="metric-card"><div class="metric-title">PBR / ROE</div>
-          <div class="metric-value" style="font-size:1.05rem;">{formatted_pbr} / {formatted_roe}</div></div>""",
+          <div class="metric-value">{final_pbr} / {final_roe}</div></div>""",
               unsafe_allow_html=True,
           )
           c5.markdown(
               """<div class="metric-card"><div class="metric-title">투자 매력도</div>
-          <div class="metric-value" style="color:#38A169;">8.5 <span style="font-size:0.8rem;">/ 10점</span></div></div>""",
+          <div class="metric-value" style="color:#38A169;">8.5 <span style="font-size:0.75rem;">/ 10점</span></div></div>""",
               unsafe_allow_html=True,
           )
 
           st.write("")
-
-          # -----------------------------------------------------------------------------
-          # 5. 한 화면 통합 리포트
-          # -----------------------------------------------------------------------------
 
           # 1️⃣ 기업 개요
           st.markdown(
@@ -422,7 +482,7 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
           """
           )
 
-          # 3️⃣ 재무 분석 & 밸류에이션 (선행 PER 반영)
+          # 3️⃣ 재무 분석 & 밸류에이션
           st.markdown(
               f"<div class='section-header'>3️⃣ 재무 분석 & 정밀 밸류에이션</div>",
               unsafe_allow_html=True,
@@ -434,23 +494,21 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
                   <tr><th>재무 및 밸류에이션 지표</th><th>현재 기업 수치</th><th>진단 및 분석</th></tr>
               </thead>
               <tbody>
-                  <tr><td><b>선행 PER (Forward PE)</b></td><td><b style="color:#58A6FF;">{formatted_forward_per}</b></td><td>내년/향후 추정 실적 대비 주가 수준 분석 지표</td></tr>
-                  <tr><td><b>Trailing PER (기존 PE)</b></td><td><b>{formatted_trailing_per}</b></td><td>최근 12개월 확정 실적 기준 주가 평가</td></tr>
-                  <tr><td><b>PBR (주가순자산비율)</b></td><td><b>{formatted_pbr}</b></td><td>기업 보유 순자산 대비 가치 평가</td></tr>
-                  <tr><td><b>ROE (자기자본이익률)</b></td><td><b>{formatted_roe}</b></td><td>자본 대비 수익 창출 능력 지표</td></tr>
+                  <tr><td><b>선행 PER (Forward PE)</b></td><td><b style="color:#58A6FF;">{final_fper}</b></td><td>추정 미래 실적 기준 밸류에이션 평가 지표</td></tr>
+                  <tr><td><b>Trailing PER (현재 PER)</b></td><td><b style="color:#F0F6FC;">{final_per}</b></td><td>최근 12개월 확정 실적 기준 주가 평가</td></tr>
+                  <tr><td><b>PBR (주가순자산비율)</b></td><td><b>{final_pbr}</b></td><td>기업 보유 순자산 대비 가치 평가</td></tr>
+                  <tr><td><b>ROE (자기자본이익률)</b></td><td><b>{final_roe}</b></td><td>자본 대비 수익 창출 능력 지표</td></tr>
               </tbody>
           </table>
           """,
               unsafe_allow_html=True,
           )
 
-          # -----------------------------------------------------------------------------
-          # 📢 광고 영역 2: 중간 스폰서 배너
-          # -----------------------------------------------------------------------------
+          # 📢 스폰서 광고 영역 2
           st.markdown(
               """
           <div class="ad-banner">
-              <span style="font-size:0.8rem; color:#6B7280; display:block; margin-bottom:4px;">SPONSORED ADVERTISEMENT</span>
+              <span style="font-size:0.75rem; color:#6B7280; display:block; margin-bottom:4px;">SPONSORED ADVERTISEMENT</span>
               <a href="https://link.coupang.com" target="_blank" style="color:#34D399; font-weight:bold; text-decoration:none;">
                   ⚡ [인기] 주식/자산관리 전문 도서 및 매매 전략 가이드 둘러보기 ➔
               </a>
@@ -471,7 +529,7 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
                 f"""
             <div class="custom-card bull">
                 <h4 style="color:#E53E3E; margin-bottom:6px;">💡 증권사 애널리스트</h4>
-                <p>"{stock_input}의 선행 PER({formatted_forward_per}) 수치를 감안했을 때 실적 모멘텀 기대감이 유지되고 있습니다."</p>
+                <p>"{stock_input}의 현재 PER({final_per}) 및 선행 PER({final_fper}) 수준을 감안할 때 실적 상승 모멘텀이 유효합니다."</p>
             </div>
             """,
                 unsafe_allow_html=True,
@@ -609,7 +667,19 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
 
           naver_url = f"https://search.naver.com/search.naver?where=news&query={urllib.parse.quote(stock_input)}"
           st.markdown(
-              f"""<div style="text-align:center; margin-top:15px; margin-bottom:30px;"><a href="{naver_url}" target="_blank"><button style="background-color:#03CF5D; color:white; border:none; padding:12px 24px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:1rem;">🟢 네이버 뉴스 전체보기 ➔</button></a></div>""",
+              f"""<div style="text-align:center; margin-top:15px; margin-bottom:20px;"><a href="{naver_url}" target="_blank"><button style="background-color:#03CF5D; color:white; border:none; padding:12px 24px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:1rem;">🟢 네이버 뉴스 전체보기 ➔</button></a></div>""",
+              unsafe_allow_html=True,
+          )
+
+          # 하단 면책문구 재명시
+          st.markdown(
+              """
+          <div class="disclaimer-box" style="text-align:center; margin-top:30px;">
+              <b>[법적 면책 고지]</b><br>
+              본 분석기에서 제공되는 내용 및 목표가/손절가 등은 알고리즘 기반 계산 결과일 뿐이며 금융투자업자의 정식 수석 의견이 아닙니다. 
+              투자 판단의 최종 책임은 사용자 개인에게 있으며 본 서비스는 투자 손실에 대한 어떠한 법적 책임을 지지 않습니다.
+          </div>
+          """,
               unsafe_allow_html=True,
           )
 
