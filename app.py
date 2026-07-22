@@ -1,7 +1,6 @@
 import datetime
 import hashlib
 import json
-import re
 import urllib.parse
 import pandas as pd
 import numpy as np
@@ -206,8 +205,9 @@ def get_stock_code(user_input):
 
 @st.cache_data(ttl=1800)
 def fetch_stock_market_data(code):
+  # 1순위: 네이버 금융 차트 API (가장 안정적)
   try:
-    url = f"https://fchart.stock.naver.com/sise.nhn?symbol={code}&timeframe=day&count=150&type=json"
+    url = f"https://fchart.stock.naver.com/sise.nhn?symbol={code}&timeframe=day&count=200&type=json"
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
     res = requests.get(url, headers=headers, timeout=5)
     if res.status_code == 200:
@@ -232,6 +232,7 @@ def fetch_stock_market_data(code):
   except Exception:
     pass
 
+  # 2순위: 야후 파이낸스 API (백업)
   try:
     ticker = f"{code}.KS" if code.startswith("0") else f"{code}.KQ"
     period1 = int((datetime.datetime.today() - datetime.timedelta(days=365)).timestamp())
@@ -253,7 +254,9 @@ def fetch_stock_market_data(code):
           'Volume': quote.get('volume')
       })
       df.set_index('Date', inplace=True)
-      return df.dropna()
+      df = df.dropna()
+      if not df.empty:
+        return df
   except Exception:
     pass
 
@@ -281,11 +284,11 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
     </div>
     """, unsafe_allow_html=True)
 
-    with st.spinner(f"[{stock_input}] 실시간 시장 데이터 수집 및 8대 핵심 요소 분석 수행 중..."):
+    with st.spinner(f"[{stock_input}] (종목코드: {code}) 실시간 시장 데이터 수집 및 8대 핵심 요소 분석 수행 중..."):
       df = fetch_stock_market_data(code)
 
     if df.empty or len(df) < 15:
-      st.error(f"⚠️ [{stock_input}]에 대한 데이터를 불러오지 못했습니다. 올바른 종목명인지 다시 확인해 주세요.")
+      st.error(f"⚠️ [{stock_input}]에 대한 데이터를 불러오지 못했습니다. 올바른 종목명/코드인지 확인하거나 잠시 후 다시 시도해 주세요.")
     else:
       current_price = int(df["Close"].iloc[-1])
       prev_price = int(df["Close"].iloc[-2])
@@ -329,7 +332,7 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
       st.plotly_chart(fig, use_container_width=True)
 
       # 단일 스크롤 연속형 월가 8대 분석 리포트
-      trend_status = "상승 추세" if current_price > ma60 else "조정 및 횡보 추세"
+      trend_status = "상승 추세" if current_price > ma60_val else "조정 및 횡보 추세"
       rsi_status = "과열(탐욕) 구간" if current_rsi > 70 else ("침체(공포) 구간" if current_rsi < 30 else "중립 구간")
 
       st.markdown(f"""
