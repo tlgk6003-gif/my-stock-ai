@@ -1,5 +1,6 @@
 import streamlit as st
 from google import genai
+import os
 
 st.set_page_config(
     page_title="국내주식 5단계 정밀 분석기", page_icon="📈", layout="wide"
@@ -13,7 +14,7 @@ st.caption(
 try:
     api_key = st.secrets["GEMINI_API_KEY"].strip()
 except Exception:
-    api_key = "AQ.Ab8RN6KXZqLFBB37T-BOxUWQdpQOtYAL_1rDOsWujs9Po0zIVQ"
+    api_key = "AQ.Ab8RN6KXZqLFBB37T-BOxUWQdpQ0tYAL_1rD0SWujs9Po0zIVQ"
 
 stock_name = st.text_input(
     "분석할 종목명 또는 종목코드를 입력하세요:",
@@ -28,11 +29,7 @@ if st.button("🚀 실시간 정밀 분석 시작", type="primary"):
     else:
         with st.spinner(f"'{stock_name}' 종목 정밀 분석 보고서 생성 중..."):
             try:
-                # AQ 키 및 일반 AIza 키 모두 수용하도록 환경 변수 방식으로 클라이언트 연결
-                import os
-
                 os.environ["GEMINI_API_KEY"] = api_key
-
                 client = genai.Client()
 
                 prompt = f"""
@@ -53,7 +50,7 @@ if st.button("🚀 실시간 정밀 분석 시작", type="primary"):
 5. 🛡️ 실전 모의투자 세팅 가이드 (손절가, 분할 매수가, 비중 제시)
 """
                 response = client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model="gemini-2.0-flash",
                     contents=prompt,
                 )
                 st.markdown(response.text)
