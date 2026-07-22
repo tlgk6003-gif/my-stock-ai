@@ -177,17 +177,30 @@ st.markdown("""
 # 탭 메뉴 구성
 tab_analysis, tab_board, tab_mypage = st.tabs(["📊 AI 종목 기술적 진단", "💬 주주 오픈 토론방", "⚙️ 마이페이지"])
 
+@st.cache_data(ttl=3600)
 def get_stock_code(user_input):
   cleaned = user_input.strip()
   if cleaned.isdigit() and len(cleaned) == 6:
     return cleaned
   
+  # 네이버 금융 실시간 검색 자동 크롤링 (어떤 종목명을 입력해도 코드를 찾아냄)
+  try:
+    encoded_query = urllib.parse.quote(cleaned)
+    search_url = f"https://finance.naver.com/search/searchList.naver?query={encoded_query}"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    res = requests.get(search_url, headers=headers, timeout=3)
+    if res.status_code == 200:
+      match = re.search(r'/item/main\.naver\?code=(\d{6})', res.text)
+      if match:
+        return match.group(1)
+  except Exception:
+    pass
+
+  # 백업용 기본 매핑
   mapping = {
       "삼성전자": "005930",
       "카카오": "035720",
-      "형지글로벌": "011080",
-      "이에이트": "418620",
-      "스타코링크": "060240",
+      "대원전선": "006340",
       "SK하이닉스": "000660",
       "LG에너지솔루션": "373220",
       "현대차": "005380"
@@ -247,7 +260,7 @@ with tab_analysis:
   </div>
   """, unsafe_allow_html=True)
 
-  stock_input = st.text_input("🔍 종목명 입력:", placeholder="예: 삼성전자, 카카오, 이에이트 또는 6자리 코드(005930)")
+  stock_input = st.text_input("🔍 종목명 입력:", placeholder="예: 대원전선, 삼성전자, 카카오 또는 6자리 코드")
 
   if st.button("🚀 AI 기술적 진단 실행", type="primary", use_container_width=True):
     if not stock_input:
@@ -267,53 +280,42 @@ with tab_analysis:
         fin_info = get_naver_financial_info(code)
 
       if df.empty or len(df) < 5:
-        # 네이버 연결 지연 시에도 화면이 깨지지 않고 완벽하게 차트를 렌더링하는 안전장치
-        dates = pd.date_range(end=datetime.datetime.today(), periods=250, freq='B')
-        np.random.seed(42)
-        walk = np.random.normal(loc=0.1, scale=1.5, size=250).cumsum()
-        base_price = 72000 + walk * 450
-        df = pd.DataFrame({
-            'Open': base_price - np.random.uniform(0, 400, 250),
-            'High': base_price + np.random.uniform(200, 800, 250),
-            'Low': base_price - np.random.uniform(200, 800, 250),
-            'Close': base_price,
-            'Volume': np.random.randint(200000, 1500000, 250)
-        }, index=dates)
+        st.error("⚠️ 해당 종목의 데이터를 불러오는 중 지연이 발생했습니다. 올바른 종목명인지 다시 확인해 주세요.")
+      else:
+        current_price = int(df["Close"].iloc[-1])
+        prev_price = int(df["Close"].iloc[-2])
+        price_change = current_price - prev_price
+        pct_change = (price_change / prev_price) * 100
 
-      current_price = int(df["Close"].iloc[-1])
-      prev_price = int(df["Close"].iloc[-2])
-      price_change = current_price - prev_price
-      pct_change = (price_change / prev_price) * 100
+        df["MA20"] = df["Close"].rolling(window=20).mean()
+        df["MA60"] = df["Close"].rolling(window=60).mean()
+        
+        delta = df["Close"].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        current_rsi = round(float(100 - (100 / (1 + (gain / loss).iloc[-1]))), 1)
 
-      df["MA20"] = df["Close"].rolling(window=20).mean()
-      df["MA60"] = df["Close"].rolling(window=60).mean()
-      
-      delta = df["Close"].diff()
-      gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-      loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-      current_rsi = round(float(100 - (100 / (1 + (gain / loss).iloc[-1]))), 1)
+        # 4분할 메트릭 카드 출력
+        c1, c2, c3, c4 = st.columns(4)
+        c1.markdown(f'<div class="metric-card"><div class="metric-title">실시간 주가</div><div class="metric-value">{current_price:,}원 ({pct_change:+.2f}%)</div></div>', unsafe_allow_html=True)
+        c2.markdown(f'<div class="metric-card"><div class="metric-title">RSI</div><div class="metric-value">{current_rsi}</div></div>', unsafe_allow_html=True)
+        c3.markdown(f'<div class="metric-card"><div class="metric-title">PER</div><div class="metric-value">{fin_info["per"]}</div></div>', unsafe_allow_html=True)
+        c4.markdown(f'<div class="metric-card"><div class="metric-title">PBR</div><div class="metric-value">{fin_info["pbr"]}</div></div>', unsafe_allow_html=True)
 
-      # 4분할 메트릭 카드 출력
-      c1, c2, c3, c4 = st.columns(4)
-      c1.markdown(f'<div class="metric-card"><div class="metric-title">실시간 주가</div><div class="metric-value">{current_price:,}원 ({pct_change:+.2f}%)</div></div>', unsafe_allow_html=True)
-      c2.markdown(f'<div class="metric-card"><div class="metric-title">RSI</div><div class="metric-value">{current_rsi}</div></div>', unsafe_allow_html=True)
-      c3.markdown(f'<div class="metric-card"><div class="metric-title">PER</div><div class="metric-value">{fin_info["per"]}</div></div>', unsafe_allow_html=True)
-      c4.markdown(f'<div class="metric-card"><div class="metric-title">PBR</div><div class="metric-value">{fin_info["pbr"]}</div></div>', unsafe_allow_html=True)
+        # 테크니컬 차트 (캔들스틱 + 거래량)
+        st.markdown("<div class='section-header'>테크니컬 차트</div>", unsafe_allow_html=True)
+        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25])
+        fig.add_trace(go.Candlestick(x=df.index, open=df["Open"], high=df["High"], low=df["Low"], close=df["Close"], name="주가"), row=1, col=1)
+        fig.add_trace(go.Bar(x=df.index, y=df["Volume"], name="거래량"), row=2, col=1)
+        fig.update_layout(template="plotly_dark", height=450, margin=dict(l=10, r=10, t=10, b=10), xaxis_rangeslider_visible=False)
+        st.plotly_chart(fig, use_container_width=True)
 
-      # 테크니컬 차트 (캔들스틱 + 거래량)
-      st.markdown("<div class='section-header'>테크니컬 차트</div>", unsafe_allow_html=True)
-      fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25])
-      fig.add_trace(go.Candlestick(x=df.index, open=df["Open"], high=df["High"], low=df["Low"], close=df["Close"], name="주가"), row=1, col=1)
-      fig.add_trace(go.Bar(x=df.index, y=df["Volume"], name="거래량"), row=2, col=1)
-      fig.update_layout(template="plotly_dark", height=450, margin=dict(l=10, r=10, t=10, b=10), xaxis_rangeslider_visible=False)
-      st.plotly_chart(fig, use_container_width=True)
-
-      # 기업 개요
-      st.markdown("<div class='section-header'>기업 개요</div>", unsafe_allow_html=True)
-      st.markdown(f'<div class="custom-card"><p>{fin_info["summary"]}</p></div>', unsafe_allow_html=True)
-      
-      # 카카오 애드핏 광고 출력
-      render_kakao_adfit()
+        # 기업 개요
+        st.markdown("<div class='section-header'>기업 개요</div>", unsafe_allow_html=True)
+        st.markdown(f'<div class="custom-card"><p>{fin_info["summary"]}</p></div>', unsafe_allow_html=True)
+        
+        # 카카오 애드핏 광고 출력
+        render_kakao_adfit()
 
 # [Tab 2] 주주 오픈 토론방 (커뮤니티 화면)
 with tab_board:
