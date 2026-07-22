@@ -13,13 +13,13 @@ import yfinance as yf
 # =============================================================================
 # 🔥 [수익화 설정] 본인의 쿠팡 파트너스 링크를 아래 큰따옴표 안에 넣어주세요.
 # =============================================================================
-COUPANG_LINK = "https://link.coupang.com/a/fAIL3kPVBc"  # <--- 여기에 본인 단축 URL 붙여넣기
+COUPANG_LINK = "https://link.coupang.com/a/XXXXXX"  # <--- 본인 파트너스 단축 URL 붙여넣기
 
 # -----------------------------------------------------------------------------
 # 1. 페이지 설정 & 커스텀 CSS
 # -----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="AI 정밀분석기",
+    page_title="AI 기술적 분석 참고기",
     page_icon="📈",
     layout="wide",
 )
@@ -69,13 +69,13 @@ st.markdown(
 
     .disclaimer-box {
         background-color: #161B22;
-        border: 1px solid #444C56;
+        border: 1px solid #E53E3E;
         border-radius: 8px;
         padding: 14px 18px;
         margin: 15px 0;
-        font-size: 0.82rem;
-        color: #8B949E;
-        line-height: 1.5;
+        font-size: 0.83rem;
+        color: #C9D1D9;
+        line-height: 1.6;
     }
 
     .ad-banner {
@@ -124,19 +124,19 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.title("📈 AI 정밀분석기")
+st.title("📈 AI 주식 기술적 데이터 참고기")
 st.caption(
-    "네이버 금융 실시간 재무연동 · 차트 · PER/PBR · 3대 시나리오 · 실시간 뉴스"
-    " 리포트"
+    "네이버 금융 실시간 재무연동 · 차트 · PER/PBR · 알고리즘 산출 참고 기준 · 실시간 뉴스 링크"
 )
 
-# 상단 법적 고지 안내
+# 상단 법적 고지 안내 (자본시장법 및 무등록 자문 방지 문구 강화)
 st.markdown(
     """
 <div class="disclaimer-box">
-    <b>⚠️ 투자 유의사항 및 법적 고지 (Disclaimer)</b><br>
-    본 서비스에서 제공하는 모든 데이터, 분석 결과, 시나리오 및 투자 비중 계산은 단순 참고용 정보이며, 특정 종목에 대한 투자 권유나 추천이 아닙니다. 
-    제공되는 정보는 실시간 시세 및 기술적 지표를 바탕으로 산출되나 데이터의 완전성과 정확성을 보장하지 않으며, <b>모든 투자 판단과 이에 따른 최종 책임은 전적으로 투자자 본인에게 있습니다.</b>
+    <b style="color:#E53E3E;">⚠️ 필수 확인사항 및 법적 면책 고지 (Disclaimer)</b><br>
+    본 서비스는 자본시장법상 금융투자업자 또는 투자자문업자가 아니며, 특정 종목에 대한 매수/매도 추천이나 수수료 기반 투자자문을 제공하지 않습니다.<br>
+    제공되는 모든 수치, 지표, 시나리오 및 기술적 참고 가격은 공개된 시세 데이터와 알고리즘 기반 단순 계산에 따른 <b>'기술적 분석 참고용 정보'</b>일 뿐입니다.<br>
+    데이터의 완전성과 정확성을 보장하지 않으며, <b>모든 투자 결정 및 최종 수익/손실에 대한 책임은 전적으로 투자자 본인에게 있습니다.</b>
 </div>
 """,
     unsafe_allow_html=True,
@@ -217,7 +217,7 @@ def fetch_realtime_news(query_term):
 
 
 stock_input = st.text_input(
-    "🔍 분석할 종목명 또는 종목코드를 입력하세요:",
+    "🔍 조회할 종목명 또는 종목코드를 입력하세요:",
     placeholder="예: 삼성전자, 대원전선, SK하이닉스, 005930",
 )
 
@@ -246,45 +246,45 @@ def get_ticker_symbol_and_code(user_input):
 # -----------------------------------------------------------------------------
 # 3. 메인 분석 실행
 # -----------------------------------------------------------------------------
-if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container_width=True):
+if st.button(
+    "🚀 AI 기술적 지표 산출 시작", type="primary", use_container_width=True
+):
   if not stock_input:
-    st.warning("⚠️ 분석할 종목명이나 종목코드를 입력해주세요.")
+    st.warning("⚠️ 조회할 종목명이나 종목코드를 입력해주세요.")
   else:
     ticker_symbol, pure_code = get_ticker_symbol_and_code(stock_input)
 
-    # ⏳ 분석 진행 대기 카운트다운 (게임 보상형 연출)
     progress_bar = st.progress(0)
     status_text = st.empty()
 
-    # 카운트다운용 스폰서 배너 표시
+    # 표시광고법 준수 쿠팡 파트너스 배너
     st.markdown(
         f"""
     <div class="ad-banner">
-        <span style="font-size:0.8rem; color:#9CA3AF; display:block; margin-bottom:6px;">☕ 본 서비스는 무료로 제공되며, 아래 후원 배너를 통해 운영됩니다.</span>
+        <span style="font-size:0.8rem; color:#9CA3AF; display:block; margin-bottom:6px;">☕ 본 서비스는 무료로 제공되며, 아래 스폰서 배너를 통해 운영됩니다.</span>
         <a href="{COUPANG_LINK}" target="_blank" style="color:#60A5FA; font-weight:bold; text-decoration:none; font-size:1.05rem;">
-            🎁 [후원 배너] 오늘의 주식/재테크 베스트셀러 도서 특가 확인하기 ➔
+            🎁 [후원 배너] 오늘의 주식/재테크 관련 도서 특가 확인하기 ➔
         </a>
-        <div style="font-size:0.7rem; color:#6B7280; margin-top:6px;">이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.</div>
+        <div style="font-size:0.75rem; color:#9CA3AF; margin-top:6px;">이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.</div>
     </div>
     """,
         unsafe_allow_html=True,
     )
 
     for i in range(1, 101):
-      time.sleep(0.03)  # 약 3초 간 진행
+      time.sleep(0.02)
       progress_bar.progress(i)
       if i < 40:
         status_text.text(
-            f"⏳ AI 모델 연결 및 실시간 데이터 수집 중... ({i}%)"
+            f"⏳ AI 데이터 수집 및 차트 수치 연동 중... ({i}%)"
         )
       elif i < 80:
         status_text.text(
-            f"📊 차트 패턴 및 PER/PBR 재무 밸류에이션 정밀 계산 중..."
-            f" ({i}%)"
+            f"📊 이평선 및 PER/PBR 재무 밸류에이션 단순 계산 중... ({i}%)"
         )
       else:
         status_text.text(
-            f"🎯 미래 시나리오 및 매수 비중 리포트 생성 완료 중... ({i}%)"
+            f"🎯 시나리오 및 기술적 수준 분석 완료... ({i}%)"
         )
 
     progress_bar.empty()
@@ -334,7 +334,6 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
         yf_pbr = info.get("priceToBook")
         yf_roe = info.get("returnOnEquity")
 
-        # N/A 정돈 로직
         final_per = (
             naver_data["per"]
             if naver_data["per"] != "-"
@@ -368,10 +367,11 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
         else:
           per_display_text = f"{final_per}"
 
-        buy_1 = current_price
-        buy_2 = int(current_price * 0.96)
-        target_price = int(current_price * 1.15)
-        stop_loss = int(current_price * 0.94)
+        # 💡 리스크 완화: 단어 변경 (매수가/목표가/손절가 ➔ 참고 지지선/저항선)
+        ref_buy_1 = current_price
+        ref_buy_2 = int(current_price * 0.96)
+        ref_target = int(current_price * 1.15)
+        ref_stop = int(current_price * 0.94)
 
         # -----------------------------------------------------------------------------
         # 4. 상단 핵심 지표
@@ -385,13 +385,13 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
         sign = "+" if price_change > 0 else ""
 
         c1.markdown(
-            f"""<div class="metric-card"><div class="metric-title">실시간 주가</div>
+            f"""<div class="metric-card"><div class="metric-title">실시간 기준 주가</div>
         <div class="metric-value" style="color:{color_style};">{current_price:,}원 <span style="font-size:0.75rem;">({sign}{pct_change:.2f}%)</span></div></div>""",
             unsafe_allow_html=True,
         )
         c2.markdown(
-            f"""<div class="metric-card"><div class="metric-title">RSI (14일)</div>
-        <div class="metric-value">{current_rsi} <span style="font-size:0.75rem; color:#8B949E;">({"과열" if current_rsi>70 else ("중립" if current_rsi>30 else "침체")})</span></div></div>""",
+            f"""<div class="metric-card"><div class="metric-title">RSI (14일 기준)</div>
+        <div class="metric-value">{current_rsi} <span style="font-size:0.75rem; color:#8B949E;">({"과열권" if current_rsi>70 else ("중립" if current_rsi>30 else "침체권")})</span></div></div>""",
             unsafe_allow_html=True,
         )
         c3.markdown(
@@ -405,8 +405,8 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
             unsafe_allow_html=True,
         )
         c5.markdown(
-            """<div class="metric-card"><div class="metric-title">투자 매력도</div>
-        <div class="metric-value" style="color:#38A169;">8.5 <span style="font-size:0.75rem;">/ 10점</span></div></div>""",
+            """<div class="metric-card"><div class="metric-title">알고리즘 정량 점수</div>
+        <div class="metric-value" style="color:#38A169;">8.5 <span style="font-size:0.75rem;">/ 10점 (참고용)</span></div></div>""",
             unsafe_allow_html=True,
         )
 
@@ -414,27 +414,26 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
 
         # 1️⃣ 기업 개요
         st.markdown(
-            f"<div class='section-header'>1️⃣ 기업 개요 & 사업 구조</div>",
+            f"<div class='section-header'>1️⃣ 기업 개요 및 공시 기반 사업 구조</div>",
             unsafe_allow_html=True,
         )
         st.markdown(
             f"""
         <div class="custom-card">
-            <h4 style="color:#58A6FF; margin-bottom:8px;">🏢 [{stock_input}] 핵심 요약</h4>
+            <h4 style="color:#58A6FF; margin-bottom:8px;">🏢 [{stock_input}] 주요 개요</h4>
             <ul>
-                <li><b>산업 분야:</b> {sector}</li>
-                <li><b>핵심 수익 구조:</b> 주력 사업 영역 중심의 지속적 매출 창출</li>
-                <li><b>시장 위치:</b> 업계 내 기술 경쟁력 및 안정적 고객기반 보유</li>
+                <li><b>산업 분류:</b> {sector}</li>
+                <li><b>사업 구조:</b> 관련 산업군 중심의 사업 운영</li>
             </ul>
-            <p style="color:#8B949E; font-size:0.9rem; margin-top:10px;"><b>기업 상세 설명:</b> {summary[:250]}...</p>
+            <p style="color:#8B949E; font-size:0.9rem; margin-top:10px;"><b>기업 요약 정보:</b> {summary[:250]}...</p>
         </div>
         """,
             unsafe_allow_html=True,
         )
 
-        # 2️⃣ 기술적 분석 & 차트
+        # 2️⃣ 기술적 차트
         st.markdown(
-            f"<div class='section-header'>2️⃣ 기술적 분석 & 차트 흐름</div>",
+            f"<div class='section-header'>2️⃣ 기술적 지표 & 이동평균선 차트</div>",
             unsafe_allow_html=True,
         )
 
@@ -452,7 +451,7 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
                 high=df["High"],
                 low=df["Low"],
                 close=df["Close"],
-                name="주가 (OHLC)",
+                name="주가",
                 increasing_line_color="#E53E3E",
                 decreasing_line_color="#3182CE",
             ),
@@ -514,39 +513,37 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
 
         st.markdown(
             f"""
-        * **추세 진단:** 이동평균선 정배열 형성 및 단기 반등세 유지
-        * **주요 지지선:** {int(current_price*0.95):,}원 (20일 이평선 영역)
-        * **주요 저항선:** {int(current_price*1.12):,}원 (전고점 박스권 영역)
-        * **RSI 상태:** 현재 **{current_rsi}**로, 안정적인 매수 관점 진입 가능
+        * **이동평균선:** 최근 20일선 및 주요 이평선 배치 상태 확인
+        * **하단 지지 참고선:** {int(current_price*0.95):,}원 (20일선 가중 영역)
+        * **상단 저항 참고선:** {int(current_price*1.12):,}원 (최근 박스권 상단 영역)
         """
         )
 
-        # 3️⃣ 재무 분석 & 밸류에이션
+        # 3️⃣ 재무 분석
         st.markdown(
-            f"<div class='section-header'>3️⃣ 재무 분석 & 정밀 밸류에이션</div>",
+            f"<div class='section-header'>3️⃣ 주요 재무 및 밸류에이션 수치</div>",
             unsafe_allow_html=True,
         )
         st.markdown(
             f"""
         <table class="styled-table">
             <thead>
-                <tr><th>재무 및 밸류에이션 지표</th><th>현재 기업 수치</th><th>진단 및 분석</th></tr>
+                <tr><th>구분</th><th>현재 수치</th><th>지표 설명</th></tr>
             </thead>
             <tbody>
-                <tr><td><b>선행 PER (Forward PE)</b></td><td><b style="color:#58A6FF;">{final_fper}</b></td><td>추정 미래 실적 기준 밸류에이션 평가 지표</td></tr>
-                <tr><td><b>확정 PER (Trailing PE)</b></td><td><b style="color:#F0F6FC;">{final_per}</b></td><td>최근 12개월 확정 실적 기준 주가 평가</td></tr>
-                <tr><td><b>PBR (주가순자산비율)</b></td><td><b>{final_pbr}</b></td><td>기업 보유 순자산 대비 가치 평가</td></tr>
-                <tr><td><b>ROE (자기자본이익률)</b></td><td><b>{final_roe}</b></td><td>자본 대비 수익 창출 능력 지표</td></tr>
+                <tr><td><b>선행 PER</b></td><td><b style="color:#58A6FF;">{final_fper}</b></td><td>추정 실적 기준 단순 주가수익비율</td></tr>
+                <tr><td><b>확정 PER</b></td><td><b style="color:#F0F6FC;">{final_per}</b></td><td>최근 12개월 실적 기준 단순 주가수익비율</td></tr>
+                <tr><td><b>PBR</b></td><td><b>{final_pbr}</b></td><td>순자산 대비 주가 수준 지표</td></tr>
+                <tr><td><b>ROE</b></td><td><b>{final_roe}</b></td><td>자기자본 수익성 수치</td></tr>
             </tbody>
         </table>
         """,
             unsafe_allow_html=True,
         )
 
-        # 4️⃣ 3자 토론 & 수급
+        # 4️⃣ 다각도 시각 제시 (주관적 문구 ➔ 객관적 관점 정리)
         st.markdown(
-            f"<div class='section-header'>4️⃣ 3자 관점 토론 (애널리스트 ·"
-            " 트레이더 · AI)</div>",
+            f"<div class='section-header'>4️⃣ 시장 지표별 해석 관점 (참고용)</div>",
             unsafe_allow_html=True,
         )
         col_t1, col_t2, col_t3 = st.columns(3)
@@ -554,8 +551,8 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
           st.markdown(
               f"""
           <div class="custom-card bull">
-              <h4 style="color:#E53E3E; margin-bottom:6px;">💡 증권사 애널리스트</h4>
-              <p>"{stock_input}의 현재 PER({final_per}) 및 밸류에이션 수준을 감안할 때 실적 상승 모멘텀이 유효합니다."</p>
+              <h4 style="color:#E53E3E; margin-bottom:6px;">📈 펀더멘털 관점</h4>
+              <p>"현재 PER({final_per}) 및 재무 지표를 토대로 한 실적 관련 모멘텀 관찰 필요"</p>
           </div>
           """,
               unsafe_allow_html=True,
@@ -564,8 +561,8 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
           st.markdown(
               f"""
           <div class="custom-card bear">
-              <h4 style="color:#3182CE; margin-bottom:6px;">📊 수급 트레이더</h4>
-              <p>"외국인 및 기관 수급 유입 및 당일 거래량({volume:,}주)을 감안할 때 눌림목 진입이 유효합니다."</p>
+              <h4 style="color:#3182CE; margin-bottom:6px;">📊 수급/차트 관점</h4>
+              <p>"당일 거래량({volume:,}주) 변화 및 주요 이평선 지지 여부 추적 관찰"</p>
           </div>
           """,
               unsafe_allow_html=True,
@@ -574,16 +571,16 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
           st.markdown(
               """
           <div class="custom-card quant">
-              <h4 style="color:#38A169; margin-bottom:6px;">🤖 AI 퀀트 시스템</h4>
-              <p>"상승 확률 84.5%. 기대 손익비가 뛰어난 구간으로 적극적 분할 매수가 권장됩니다."</p>
+              <h4 style="color:#38A169; margin-bottom:6px;">🤖 퀀트 수치 관점</h4>
+              <p>"과거 유사 패턴 분석 시 단기 변동성 구간 진입 가능성 수치화"</p>
           </div>
           """,
               unsafe_allow_html=True,
           )
 
-        # 5️⃣ 투자 심리 & 리스크
+        # 5️⃣ 리스크 요인
         st.markdown(
-            f"<div class='section-header'>5️⃣ 투자 심리 & 리스크 요인</div>",
+            f"<div class='section-header'>5️⃣ 시장 변동성 및 리스크 요인</div>",
             unsafe_allow_html=True,
         )
         col_r1, col_r2 = st.columns(2)
@@ -591,9 +588,9 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
           st.markdown(
               """
           <div class="custom-card">
-              <h4 style="color:#ECC94B; margin-bottom:6px;">🧠 투자 심리 (공포 / 탐욕)</h4>
-              <p>현재 탐욕 지수: <b>62점 (중립~약한 탐욕)</b></p>
-              <p style="color:#8B949E; font-size:0.9rem;">과열 상태는 아니며 과도한 공포감도 해소된 안정적인 매수 분위기입니다.</p>
+              <h4 style="color:#ECC94B; margin-bottom:6px;">🧠 과열 / 심리 지표</h4>
+              <p>RSI 기반 단순 심리 상태: <b>중립~관망 구간</b></p>
+              <p style="color:#8B949E; font-size:0.9rem;">지수 변동에 따른 단순 심리 상태 지표 수치입니다.</p>
           </div>
           """,
               unsafe_allow_html=True,
@@ -602,54 +599,54 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
           st.markdown(
               """
           <div class="custom-card warn">
-              <h4 style="color:#DD6B20; margin-bottom:6px;">⚠️ 주요 리스크 요인</h4>
+              <h4 style="color:#DD6B20; margin-bottom:6px;">⚠️ 주요 주의 리스크 요인</h4>
               <ul style="font-size:0.9rem;">
-                  <li><b>거시경제:</b> 글로벌 금리 변동성 및 환율 추이</li>
-                  <li><b>산업 리스크:</b> 원자재 가격 변동 및 전방 산업 수요 흐름</li>
-                  <li><b>기업 고유:</b> 단기 매물대 돌파 여부 관찰 필요</li>
+                  <li><b>거시 변수:</b> 환율, 금리 등 거시경제 환경 영향</li>
+                  <li><b>시장 변수:</b> 전체 증시 수급 이탈 가능성</li>
+                  <li><b>기술적 리스크:</b> 주요 지지선 이탈 시 수급 변동 가능성</li>
               </ul>
           </div>
           """,
               unsafe_allow_html=True,
           )
 
-        # 6️⃣ 3가지 시나리오 분석
+        # 6️⃣ 기술적 3대 시나리오 (용어 변경)
         st.markdown(
-            f"<div class='section-header'>6️⃣ 3대 미래 시나리오</div>",
+            f"<div class='section-header'>6️⃣ 기술적 단순 시나리오 예시 (참고)</div>",
             unsafe_allow_html=True,
         )
         st.markdown(
             f"""
         <div class="custom-card bull">
-            <h4 style="color:#E53E3E; margin-bottom:6px;">📈 강세 시나리오 (목표가: {target_price:,}원)</h4>
-            <p>실적 상승 기대감과 외인/기관 수급 집중 시 저항선 돌파 후 추가 상승</p>
+            <h4 style="color:#E53E3E; margin-bottom:6px;">📈 기술적 상향 돌파 시나리오 (상단 참고선: {ref_target:,}원)</h4>
+            <p>거래량 증가 및 매물대 돌파 시 상단 저항선 테스트 가능성</p>
         </div>
         <div class="custom-card">
-            <h4 style="color:#8B949E; margin-bottom:6px;">📊 중립 시나리오 (박스권: {buy_2:,}원 ~ {buy_1:,}원)</h4>
-            <p>지수 횡보 시 주요 이동평균선 부근에서 가격 매물 소화 진행</p>
+            <h4 style="color:#8B949E; margin-bottom:6px;">📊 횡보 구간 시나리오 (참고 범위: {ref_buy_2:,}원 ~ {ref_buy_1:,}원)</h4>
+            <p>이동평균선 부근에서 매물 소화 및 박스권 형성 가능성</p>
         </div>
         <div class="custom-card bear">
-            <h4 style="color:#3182CE; margin-bottom:6px;">📉 약세 시나리오 (손절가: {stop_loss:,}원)</h4>
-            <p>돌발 악재 발생으로 지지선 이탈 시 손절가를 통한 적극적 원금 관리 필요</p>
+            <h4 style="color:#3182CE; margin-bottom:6px;">📉 기술적 하향 이탈 시나리오 (하단 참고선: {ref_stop:,}원)</h4>
+            <p>시장 악재나 지지선 이탈 시 하단 가격 구간 재설정 관찰</p>
         </div>
         """,
             unsafe_allow_html=True,
         )
 
-        # 7️⃣ 모의투자 비중 계산기
+        # 7️⃣ 모의 계산기 (투자자문 오인 방지를 위해 '모의 시뮬레이터'로 명칭 변경)
         st.markdown(
-            f"<div class='section-header'>7️⃣ 전략적 모의투자 비중 계산기</div>",
+            f"<div class='section-header'>7️⃣ 수치 계산 연습용 모의 시뮬레이터</div>",
             unsafe_allow_html=True,
         )
         st.markdown(
             f"""
         <table class="styled-table">
-            <thead><tr><th>구분</th><th>목표 가격</th><th>추천 자금 비중</th><th>대응 가이드</th></tr></thead>
+            <thead><tr><th>기술적 구간 구분</th><th>산출 기준가</th><th>가상 참고 비율</th><th>기술적 의미</th></tr></thead>
             <tbody>
-                <tr><td><b>1차 매수가</b></td><td><b>{buy_1:,}원</b></td><td><span style="color:#38A169;">40%</span></td><td>현재가 부근 선취매 진입</td></tr>
-                <tr><td><b>2차 매수가</b></td><td><b>{buy_2:,}원</b></td><td><span style="color:#38A169;">60%</span></td><td>눌림목 발생 시 분할 추가 매수</td></tr>
-                <tr><td><b>목표가 (익절)</b></td><td><b style="color:#E53E3E;">{target_price:,}원</b></td><td><span style="color:#E53E3E;">50% 익절</span></td><td>목표가 도달 시 수익 실현</td></tr>
-                <tr><td><b>손절가 (대응)</b></td><td><b style="color:#3182CE;">{stop_loss:,}원</b></td><td><span style="color:#3182CE;">100% 손절</span></td><td>손절가 이탈 시 원금 관리 대응</td></tr>
+                <tr><td><b>현재 기준가</b></td><td><b>{ref_buy_1:,}원</b></td><td><span style="color:#38A169;">40%</span></td><td>현재 시세 수치 기준</td></tr>
+                <tr><td><b>하단 기술적 참고가</b></td><td><b>{ref_buy_2:,}원</b></td><td><span style="color:#38A169;">60%</span></td><td>-4% 조정 시 가상 수치</td></tr>
+                <tr><td><b>상단 저항 참고가</b></td><td><b style="color:#E53E3E;">{ref_target:,}원</b></td><td><span style="color:#E53E3E;">-</span></td><td>+15% 단순 기술적 수치</td></tr>
+                <tr><td><b>하단 지지 참고가</b></td><td><b style="color:#3182CE;">{ref_stop:,}원</b></td><td><span style="color:#3182CE;">-</span></td><td>-6% 단순 기술적 수치</td></tr>
             </tbody>
         </table>
         """,
@@ -657,23 +654,23 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
         )
 
         budget = st.number_input(
-            "💡 투자 예정 자금(원)을 입력하세요:",
+            "💡 모의로 계산해볼 입력 금액(원):",
             min_value=1000000,
             value=10000000,
             step=1000000,
         )
-        qty_1 = int((budget * 0.4) // buy_1)
-        qty_2 = int((budget * 0.6) // buy_2)
-        st.success(
-            f"👉 **1차 매수 계획:** {buy_1:,}원에 **{qty_1:,}주** | **2차 매수"
-            f" 계획:** {buy_2:,}원에 **{qty_2:,}주** (총 {qty_1+qty_2:,}주"
-            " 매수 가능)"
+        qty_1 = int((budget * 0.4) // ref_buy_1)
+        qty_2 = int((budget * 0.6) // ref_buy_2)
+        st.info(
+            f"💡 **가상 시뮬레이션 결과:** {ref_buy_1:,}원 기준 약 **{qty_1:,}주**"
+            f" / {ref_buy_2:,}원 기준 약 **{qty_2:,}주** 환산 가능 (단순 수학적"
+            " 산출 결과)"
         )
 
-        # 8️⃣ 실시간 뉴스
+        # 8️⃣ 실시간 뉴스 (Outlink 방식 명시)
         st.markdown(
-            f"<div class='section-header'>8️⃣ [{stock_input}] 실시간 한국어"
-            " 뉴스</div>",
+            f"<div class='section-header'>8️⃣ [{stock_input}] 관련 외부 뉴스 (링크"
+            " 연결)</div>",
             unsafe_allow_html=True,
         )
         realtime_news = fetch_realtime_news(stock_input)
@@ -685,7 +682,7 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
             <div style="background-color:#161B22; border:1px solid #30363D; border-radius:8px; padding:14px; margin-bottom:10px;">
                 <div style="font-size:0.85rem; color:#8B949E; margin-bottom:4px;">📰 <b>{news['source']}</b> • {news['pub_date']}</div>
                 <div style="font-size:1.05rem; font-weight:bold; color:#F0F6FC; margin-bottom:8px;">{news['title']}</div>
-                <a href="{news['link']}" target="_blank" style="color:#58A6FF; font-size:0.85rem; text-decoration:none; font-weight:600;">🔗 실시간 기사 원문 보기 ➔</a>
+                <a href="{news['link']}" target="_blank" style="color:#58A6FF; font-size:0.85rem; text-decoration:none; font-weight:600;">🔗 언론사 원문 기사 보기 (외부 연결) ➔</a>
             </div>
             """,
                 unsafe_allow_html=True,
@@ -693,21 +690,21 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
 
         naver_url = f"https://search.naver.com/search.naver?where=news&query={urllib.parse.quote(stock_input)}"
         st.markdown(
-            f"""<div style="text-align:center; margin-top:15px; margin-bottom:20px;"><a href="{naver_url}" target="_blank"><button style="background-color:#03CF5D; color:white; border:none; padding:12px 24px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:1rem;">🟢 네이버 뉴스 전체보기 ➔</button></a></div>""",
+            f"""<div style="text-align:center; margin-top:15px; margin-bottom:20px;"><a href="{naver_url}" target="_blank"><button style="background-color:#03CF5D; color:white; border:none; padding:12px 24px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:1rem;">🟢 네이버 뉴스 전체 검색 ➔</button></a></div>""",
             unsafe_allow_html=True,
         )
 
-        # 하단 면책문구
+        # 하단 면책문구 재차 강조
         st.markdown(
             """
         <div class="disclaimer-box" style="text-align:center; margin-top:30px;">
-            <b>[법적 면책 고지]</b><br>
-            본 분석기에서 제공되는 내용 및 목표가/손절가 등은 알고리즘 기반 계산 결과일 뿐이며 금융투자업자의 정식 수석 의견이 아닙니다. 
-            투자 판단의 최종 책임은 사용자 개인에게 있으며 본 서비스는 투자 손실에 대한 어떠한 법적 책임을 지지 않습니다.
+            <b>[법적 책임의 한계 및 면책 고지]</b><br>
+            본 웹사이트에서 제공하는 데이터, 분석 수치, 기술적 지표 및 시뮬레이션 결과는 알고리즘에 의해 자동 계산되는 단순 참고용 정보입니다.<br>
+            어떠한 경우에도 투자 결과에 대한 법적 책임 소재의 증빙자료로 사용될 수 없으며, 금융투자 상품 거래에 따른 모든 위험과 책임은 이용자 본인에게 있습니다.
         </div>
         """,
             unsafe_allow_html=True,
         )
 
     except Exception as e:
-      st.error(f"⚠️ 데이터 분석 중 오류가 발생했습니다: {e}")
+      st.error(f"⚠️ 데이터 처리 중 오류가 발생했습니다: {e}")
