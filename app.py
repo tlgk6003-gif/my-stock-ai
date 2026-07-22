@@ -15,7 +15,7 @@ import yfinance as yf
 # =============================================================================
 # 🔥 [수익화 설정] 본인의 쿠팡 파트너스 링크를 아래 큰따옴표 안에 넣어주세요.
 # =============================================================================
-COUPANG_LINK = "https://link.coupang.com/a/XXXXXX"  # <--- 본인 파트너스 단축 URL 붙여넣기
+COUPANG_LINK = "https://link.coupang.com/a/XXXXXX"  # <--- 본인 파트너스 단축 URL 넣기
 
 # Firebase 실시간 데이터베이스 URL
 FIREBASE_URL = "https://mystockcommunity-dd967-default-rtdb.firebaseio.com/"
@@ -257,7 +257,7 @@ if "user_id" not in st.session_state:
 if "nickname" not in st.session_state:
   st.session_state["nickname"] = ""
 
-# 사이드바를 통한 회원가입 및 로그인 창 구현
+# 사이드바 인증 센터
 with st.sidebar:
   st.markdown("### 🔐 회원 인증 센터")
 
@@ -338,7 +338,7 @@ with st.sidebar:
 
   st.markdown("---")
   st.markdown(
-      "<div style='font-size:0.8rem; color:#8b949e;'>⚡ AI 주식분석 플랫폼 v2.6<br>© 2026 Stock Community</div>",
+      "<div style='font-size:0.8rem; color:#8b949e;'>⚡ AI 주식분석 플랫폼 v2.7<br>© 2026 Stock Community</div>",
       unsafe_allow_html=True,
   )
 
@@ -353,16 +353,16 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-tab_analysis, tab_board = st.tabs(
-    ["📊 AI 종목 기술적 진단", "💬 주주 오픈 토론방"]
+tab_analysis, tab_board, tab_mypage = st.tabs(
+    ["📊 AI 종목 기술적 진단", "💬 주주 오픈 토론방", "⚙️ 마이페이지"]
 )
 
 # -----------------------------------------------------------------------------
-# 2. 크롤링 및 유틸리티 함수 (종목명 ➔ 코스피/코스닥 정확한 자동 검색)
+# 2. 크롤링 및 유틸리티 함수 (종목명 검색 강화 & 키이스트/E8 등 예외 대응)
 # -----------------------------------------------------------------------------
 @st.cache_data(ttl=3600)
 def search_naver_stock_code(query):
-  """네이버 금융 자동완성 API를 활용해 한글 종목명으로 6자리 종목코드 검색"""
+  """네이버 금융 자동완성 API를 활용해 한글/영문 종목명으로 6자리 종목코드 검색"""
   try:
     url = f"https://ac.finance.naver.com/ac?q={urllib.parse.quote(query)}&target=stock"
     headers = {
@@ -375,8 +375,7 @@ def search_naver_stock_code(query):
       data = res.json()
       items = data.get("items", [])
       if items and len(items[0]) > 0:
-        stock_code = items[0][0]
-        return stock_code
+        return items[0][0]  # 6자리 종목코드
   except Exception:
     pass
   return None
@@ -471,7 +470,7 @@ def fetch_stock_history(ticker_symbol):
 def get_ticker_symbol_and_code(user_input):
   user_input = user_input.strip()
 
-  # 1. 사용자가 6자리 숫자로 입력한 경우
+  # 1. 사용자가 6자리 숫자로 직접 입력한 경우
   if user_input.isdigit() and len(user_input) == 6:
     test_url = f"https://finance.naver.com/item/main.naver?code={user_input}"
     try:
@@ -488,10 +487,11 @@ def get_ticker_symbol_and_code(user_input):
     except:
       return f"{user_input}.KQ", user_input
 
-  # 2. 주요 종목 하드코딩 매핑
+  # 2. 주요 종목 수동 하드코딩 매핑 (키이스트 등 영문/특수코드 포함)
   mapping = {
       "삼성전자": ("005930.KS", "005930"),
       "SK하이닉스": ("000660.KS", "000660"),
+      "키이스트": ("054780.KQ", "054780"),
       "대원전선": ("006340.KS", "006340"),
       "한화오션": ("042660.KS", "042660"),
       "LG에너지솔루션": ("373220.KS", "373220"),
@@ -501,16 +501,15 @@ def get_ticker_symbol_and_code(user_input):
       "에코프로": ("086520.KQ", "086520"),
       "알테오젠": ("196170.KQ", "196170"),
       "HLB": ("028300.KQ", "028300"),
-      "에이스테크": ("088800.KQ", "088800"),
-      "필에너지": ("378340.KQ", "378340"),
   }
 
   if user_input in mapping:
     return mapping[user_input]
 
-  # 3. 네이버 금융 자동완성 API를 통한 한글 종목명 코드로 변환 및 코스닥(.KQ)/코스피(.KS) 자동 판별
+  # 3. 네이버 금융 자동완성 API 조회
   found_code = search_naver_stock_code(user_input)
   if found_code:
+    # 6자리 코드가 성공적으로 찾아졌다면 코스피/코스닥 판별
     test_url = f"https://finance.naver.com/item/main.naver?code={found_code}"
     try:
       headers = {
@@ -526,7 +525,7 @@ def get_ticker_symbol_and_code(user_input):
     except:
       return f"{found_code}.KQ", found_code
 
-  # 4. 실패 시 기본 값 반환
+  # 4. API 검색 실패 시 야후 파이낸스 표준 심볼 변환 시도 (.KQ 기본 부여)
   return f"{user_input}.KQ", user_input
 
 
@@ -624,7 +623,7 @@ with tab_analysis:
 
   stock_input = st.text_input(
       "🔍 분석 대상 종목명 또는 6자리 종목코드를 입력하세요:",
-      placeholder="예: 에코프로비엠, 알테오젠, 삼성전자, 247540",
+      placeholder="예: 키이스트, 에코프로비엠, 삼성전자, 054780",
   )
 
   if st.button(
@@ -1003,9 +1002,7 @@ with tab_board:
             new_id = (max([p.get("id", 0) for p in posts]) + 1) if posts else 1
             new_post = {
                 "id": new_id,
-                "author": st.session_state[
-                    "nickname"
-                ],  # 커뮤니티에는 닉네임으로 표시
+                "author": st.session_state["nickname"],
                 "category": category,
                 "title": title,
                 "content": content,
@@ -1054,7 +1051,6 @@ with tab_board:
           st.rerun()
 
       with col_act2:
-        # 본인이 작성한 글일 때만 삭제 허용 (닉네임 기준 체크)
         if (
             st.session_state["logged_in"]
             and st.session_state["nickname"] == post.get("author")
@@ -1109,3 +1105,80 @@ with tab_board:
           st.caption("🔒 댓글을 작성하려면 로그인이 필요합니다.")
 
       st.write("")
+
+
+# =============================================================================
+# 🟢 TAB 3: 마이페이지 (회원 정보 관리 및 닉네임 수정)
+# =============================================================================
+with tab_mypage:
+  st.subheader("⚙️ 마이페이지 (회원 정보 설정)")
+  st.markdown(
+      "계정 정보를 확인하고 커뮤니티에서 사용될 **닉네임**을 변경하실 수"
+      " 있습니다."
+  )
+
+  if not st.session_state["logged_in"]:
+    st.warning("🔒 마이페이지를 이용하시려면 먼저 로그인해 주세요.")
+  else:
+    users_db = load_users()
+    safe_key = st.session_state["user_id"].replace(".", "_").replace("#", "_").replace("$", "_")
+    current_user_info = users_db.get(safe_key, {})
+
+    st.markdown("---")
+    col_mp1, col_mp2 = st.columns(2)
+    with col_mp1:
+      st.markdown(
+          f"""
+            <div class="custom-card">
+                <h4 style="color:#58a6ff; margin-bottom:10px;">📋 회원 기본 정보</h4>
+                <p style="color:#c9d1d9; margin-bottom:6px;"><b>아이디:</b> {st.session_state['user_id']}</p>
+                <p style="color:#c9d1d9; margin-bottom:6px;"><b>현재 닉네임:</b> <span style="color:#38bdf8; font-weight:bold;">{st.session_state['nickname']}</span></p>
+                <p style="color:#c9d1d9; margin-bottom:0px;"><b>가입 일시:</b> {current_user_info.get('joined_date', '정보 없음')}</p>
+            </div>
+            """,
+          unsafe_allow_html=True,
+      )
+
+    with col_mp2:
+      st.markdown(
+          """
+            <div class="custom-card quant">
+                <h4 style="color:#10b981; margin-bottom:10px;">✨ 닉네임 변경 가이드</h4>
+                <p style="color:#c9d1d9; font-size:0.9rem; line-height:1.5; margin-bottom:0px;">
+                    변경하실 새로운 닉네임을 입력 후 수정 버튼을 누르시면 즉시 반영됩니다. (오픈 토론방 및 댓글에 적용)
+                </p>
+            </div>
+            """,
+          unsafe_allow_html=True,
+      )
+
+    st.write("")
+    with st.form("update_nickname_form"):
+      st.markdown("#### ✏️ 닉네임 변경하기")
+      new_nickname_input = st.text_input(
+          "새로운 닉네임 입력", value=st.session_state["nickname"]
+      )
+      update_btn = st.form_submit_button(
+          "닉네임 변경 저장", type="primary", use_container_width=True
+      )
+
+      if update_btn:
+        if not new_nickname_input.strip():
+          st.warning("변경할 닉네임을 입력해주세요.")
+        else:
+          # DB 데이터 갱신
+          if safe_key in users_db:
+            users_db[safe_key]["nickname"] = new_nickname_input.strip()
+            # Firebase 전체 유저 저장소 업데이트
+            try:
+              requests.put(
+                  f"{FIREBASE_URL}users.json", json=users_db, timeout=5
+              )
+              st.session_state["nickname"] = new_nickname_input.strip()
+              st.success(
+                  f"닉네임이 성공적으로 '{new_nickname_input.strip()}'(으)로"
+                  " 변경되었습니다!"
+              )
+              st.rerun()
+            except Exception as e:
+              st.error(f"닉네임 변경 중 오류가 발생했습니다: {e}")
