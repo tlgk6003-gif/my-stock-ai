@@ -1,6 +1,5 @@
 import streamlit as st
-from google import genai
-import os
+from huggingface_hub import InferenceClient
 
 st.set_page_config(
     page_title="국내주식 5단계 정밀 분석기", page_icon="📈", layout="wide"
@@ -8,13 +7,14 @@ st.set_page_config(
 
 st.title("📈 AI 국내주식 5단계 정밀 분석 시스템")
 st.caption(
-    "이평선(5/20/60/112/224일) 기반 차트 지도, 3자 종합 토론, 실전 모의투자 세팅 제공"
+    "이평선(5/20/60/112/224일) 기반 차트 지도, 3자 종합 토론, 실전 모의투자"
+    " 세팅 제공"
 )
 
 try:
-    api_key = st.secrets["GEMINI_API_KEY"].strip()
+    hf_token = st.secrets["HF_TOKEN"].strip()
 except Exception:
-    api_key = "AQ.Ab8RN6Kcmj--YD2ag_auIYRBYM9cA6ufwmqJc7cBRwEbmbrwcw"
+    hf_token = ""
 
 stock_name = st.text_input(
     "분석할 종목명 또는 종목코드를 입력하세요:",
@@ -22,15 +22,16 @@ stock_name = st.text_input(
 )
 
 if st.button("🚀 실시간 정밀 분석 시작", type="primary"):
-    if not api_key:
-        st.error("Streamlit Secrets에 GEMINI_API_KEY가 설정되지 않았습니다!")
+    if not hf_token:
+        st.error("Streamlit Secrets에 HF_TOKEN이 설정되지 않았습니다!")
     elif not stock_name:
         st.warning("분석할 종목명을 입력해주세요.")
     else:
         with st.spinner(f"'{stock_name}' 종목 정밀 분석 보고서 생성 중..."):
             try:
-                os.environ["GEMINI_API_KEY"] = api_key
-                client = genai.Client()
+                client = InferenceClient(
+                    "meta-llama/Meta-Llama-3-70B-Instruct", token=hf_token
+                )
 
                 prompt = f"""
 너는 KOSPI/KOSDAQ 분석 전문 트레이더이자 리서치 애널리스트야.
@@ -49,11 +50,11 @@ if st.button("🚀 실시간 정밀 분석 시작", type="primary"):
 4. 🎯 결론 및 종합 투자 의견 (매수/매도/관망 점수 및 목표가)
 5. 🛡️ 실전 모의투자 세팅 가이드 (손절가, 분할 매수가, 비중 제시)
 """
-                response = client.models.generate_content(
-                    model="gemini-2.0-flash",
-                    contents=prompt,
+                response = client.chat_completion(
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=2048,
                 )
-                st.markdown(response.text)
+                st.markdown(response.choices[0].message.content)
 
             except Exception as e:
                 st.error(f"분석 중 오류가 발생했습니다: {e}")
