@@ -183,7 +183,7 @@ def get_stock_code(user_input):
   if cleaned.isdigit() and len(cleaned) == 6:
     return cleaned
   
-  # 주요 종목 빠른 매핑 사전 (자주 쓰이는 종목 즉시 반환)
+  # 주요 종목 빠른 사전
   quick_mapping = {
       "삼성전자": "005930",
       "카카오": "035720",
@@ -197,12 +197,12 @@ def get_stock_code(user_input):
   if cleaned in quick_mapping:
     return quick_mapping[cleaned]
 
-  # 네이버 증권 자동 검색 시도
+  # 네이버 증권 검색 크롤링 (User-Agent 강화)
   try:
     encoded_query = urllib.parse.quote(cleaned.encode('euc-kr'))
     search_url = f"https://finance.naver.com/search/searchList.naver?query={encoded_query}"
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-    res = requests.get(search_url, headers=headers, encoding='euc-kr', timeout=3)
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+    res = requests.get(search_url, headers=headers, timeout=3)
     res.encoding = 'euc-kr'
     if res.status_code == 200:
       match = re.search(r'/item/main\.naver\?code=(\d{6})', res.text)
@@ -211,33 +211,38 @@ def get_stock_code(user_input):
   except Exception:
     pass
 
-  return "005930"  # 기본값 삼성전자
+  return "005930"
 
 @st.cache_data(ttl=1800)
-def fetch_naver_chart_data(code):
+def fetch_stock_market_data(code):
+  # 1순위: FinanceDataReader 활용 (가장 안정적)
   try:
-    url = f"https://fchart.stock.naver.com/sise.nhn?symbol={code}&timeframe=day&count=250&type=json"
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-    res = requests.get(url, headers=headers, timeout=5)
-    if res.status_code == 200:
-      data = res.json()
-      chart_data = data.get("itemData", [])
-      if chart_data:
-        rows = []
-        for item in chart_data:
-          rows.append({
-              "Date": pd.to_datetime(str(item[0]), format="%Y%m%d"),
-              "Open": float(item[1]),
-              "High": float(item[2]),
-              "Low": float(item[3]),
-              "Close": float(item[4]),
-              "Volume": float(item[5])
-          })
-        df = pd.DataFrame(rows)
-        df.set_index("Date", inplace=True)
-        return df
+    import FinanceDataReader as fdr
+    df = fdr.DataReader(code, start=(datetime.datetime.today() - datetime.timedelta(days=365)).strftime('%Y-%m-%d'))
+    if not df.empty:
+      # 컬럼명 표준화 (Open, High, Low, Close, Volume)
+      df = df.rename(columns=lambda x: x.capitalize())
+      if 'Close' in df.columns:
+        return df[['Open', 'High', 'Low', 'Close', 'Volume']].dropna()
   except Exception:
     pass
+
+  # 2순위: 네이버 일별 시세 페이지 크롤링 백업
+  try:
+    url = f"https://finance.naver.com/item/sise_day.naver?code={code}&page=1"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    dfs = pd.read_html(url, header=0)
+    if dfs:
+      df = dfs[0].dropna(subset=['종가'])
+      df = df.rename(columns={'날짜': 'Date', '시가': 'Open', '고가': 'High', '저가': 'Low', '종가': 'Close', '거래량': 'Volume'})
+      df['Date'] = pd.to_datetime(df['Date'])
+      df.set_index('Date', inplace=True)
+      for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
+        df[col] = df[col].astype(str).str.replace(',', '').astype(float)
+      return df.sort_index()
+  except Exception:
+    pass
+
   return pd.DataFrame()
 
 @st.cache_data(ttl=1800)
@@ -267,7 +272,7 @@ with tab_analysis:
   </div>
   """, unsafe_allow_html=True)
 
-  stock_input = st.text_input("🔍 종목명 입력:", placeholder="예: 대원전선, 삼성전자, 카카오 또는 6자리 코드")
+  stock_input = st.text_input("🔍 종목명 입력:", placeholder="예: 삼성전자, 대원전선, 카카오 또는 6자리 코드")
 
   if st.button("🚀 AI 기술적 진단 실행", type="primary", use_container_width=True):
     if not stock_input:
@@ -283,7 +288,7 @@ with tab_analysis:
       """, unsafe_allow_html=True)
 
       with st.spinner("실시간 데이터 분석 중..."):
-        df = fetch_naver_chart_data(code)
+        df = fetch_stock_market_data(code)
         fin_info = get_naver_financial_info(code)
 
       if df.empty or len(df) < 5:
