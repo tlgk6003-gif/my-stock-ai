@@ -339,7 +339,7 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown(
-        "<div style='font-size:0.8rem; color:#8b949e;'>⚡ AI 주식분석 플랫폼 v3.4<br>© 2026 Stock Community</div>",
+        "<div style='font-size:0.8rem; color:#8b949e;'>⚡ AI 주식분석 플랫폼 v3.5<br>© 2026 Stock Community</div>",
         unsafe_allow_html=True,
     )
 
@@ -360,7 +360,7 @@ tab_analysis, tab_board, tab_mypage = st.tabs(
 
 
 # -----------------------------------------------------------------------------
-# 2. KRX 전 종목 자동 연동 및 검색 엔진 (세션 차단 우회 및 한글 티커 방지 포함)
+# 2. KRX 전 종목 자동 연동 및 네이버 금융 크롤링 (장마감 종가 완벽 방어)
 # -----------------------------------------------------------------------------
 @st.cache_data(ttl=86400)
 def get_krx_stock_master():
@@ -393,21 +393,59 @@ def search_naver_stock_code(query):
     return None
 
 
-@st.cache_data(ttl=300)
-def get_naver_financial_data(code_num):
+@st.cache_data(ttl=60)
+def get_naver_realtime_stock_data(code_num):
     url = f"https://finance.naver.com/item/main.naver?code={code_num}"
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         )
     }
-    res = {"per": "-", "forward_per": "-", "pbr": "-", "roe": "-"}
+    res = {
+        "current_price": 0,
+        "price_change": 0,
+        "pct_change": 0.0,
+        "per": "-",
+        "forward_per": "-",
+        "pbr": "-",
+        "roe": "-",
+    }
     try:
         resp = requests.get(url, headers=headers, timeout=4)
         text = resp.text
-        per_match = re.search(
-            r'<em id="_per">([\d\.\-]+)</em>', text
-        ) or re.search(r'PER\s*<em[^>]*>([\d\.\-]+)</em>', text)
+
+        # 네이버 금융 현재가 또는 최종 종가 파싱
+        price_match = re.search(r'<em class="no_down">.*?<span class="blind">([\d,]+)</span>', text, re.DOTALL) or \
+                      re.search(r'<em class="no_up">.*?<span class="blind">([\d,]+)</span>', text, re.DOTALL) or \
+                      re.search(r'<strong class="current">.*?<span class="blind">([\d,]+)</span>', text, re.DOTALL)
+        
+        if not price_match:
+            price_match = re.search(r'현재가.*?<em[^>]*>([\d,]+)</em>', text, re.DOTALL) or \
+                          re.search(r'종가.*?<em[^>]*>([\d,]+)</em>', text, re.DOTALL)
+
+        if price_match:
+            p_str = price_match.group(1).replace(",", "")
+            res["current_price"] = int(p_str)
+
+        # 등락 금액 및 등락률 파싱
+        change_match = re.search(r'전일대비.*?<span class="blind">([\d,]+)</span>', text, re.DOTALL)
+        sign_match = re.search(r'전일대비.*?<span class="ico\s+(up|down)">', text, re.DOTALL)
+        rate_match = re.search(r'등락률.*?<span class="blind">([\d\.\-]+)</span>', text, re.DOTALL)
+
+        if change_match:
+            c_val = int(change_match.group(1).replace(",", ""))
+            if sign_match and "down" in sign_match.group(1):
+                c_val = -c_val
+            res["price_change"] = c_val
+
+        if rate_match:
+            r_val = float(rate_match.group(1))
+            if sign_match and "down" in sign_match.group(1):
+                r_val = -r_val
+            res["pct_change"] = r_val
+
+        # PER, PBR 파싱
+        per_match = re.search(r'<em id="_per">([\d\.\-]+)</em>', text) or re.search(r'PER\s*<em[^>]*>([\d\.\-]+)</em>', text)
         if per_match and per_match.group(1) != "-":
             res["per"] = f"{per_match.group(1)}배"
 
@@ -418,6 +456,7 @@ def get_naver_financial_data(code_num):
         fper_match = re.search(r'<em id="_cper">([\d\.\-]+)</em>', text)
         if fper_match and fper_match.group(1) != "-":
             res["forward_per"] = f"{fper_match.group(1)}배"
+
     except Exception:
         pass
     return res
@@ -485,7 +524,7 @@ def fetch_stock_history(ticker_symbol):
     })
     
     stock = yf.Ticker(clean_symbol, session=session)
-    df = stock.history(period="2y")  # 224일선 계산을 위해 2년 데이터 조회
+    df = stock.history(period="2y")
     if df.empty:
         if clean_symbol.endswith(".KS"):
             alt_symbol = clean_symbol.replace(".KS", ".KQ")
@@ -691,6 +730,7 @@ with tab_analysis:
                     "⚡ 실시간 증권 빅데이터 및 퀀트 지표를 정밀 산출 중입니다..."
                 ):
                     df, info = fetch_stock_history(ticker_symbol)
+                    naver_data = get_naver_realtime_stock_data(pure_code)
 
                 if df is None or df.empty:
                     st.error(
@@ -701,14 +741,20 @@ with tab_analysis:
                         icon="🚨"
                     )
                 else:
-                    raw_current = df["Close"].iloc[-1]
-                    raw_prev = df["Close"].iloc[-2] if len(df) > 1 else raw_current
-                    raw_volume = df["Volume"].iloc[-1]
+                    # 네이버 크롤링 가격 우선 적용, 실패시 yfinance 최근 종가 폴백 반영
+                    if naver_data["current_price"] > 0:
+                        current_price = naver_data["current_price"]
+                        price_change = naver_data["price_change"]
+                        pct_change = naver_data["pct_change"]
+                    else:
+                        raw_current = df["Close"].iloc[-1]
+                        raw_prev = df["Close"].iloc[-2] if len(df) > 1 else raw_current
+                        current_price = int(raw_current) if not pd.isna(raw_current) else 0
+                        prev_price = int(raw_prev) if not pd.isna(raw_prev) else current_price
+                        price_change = current_price - prev_price
+                        pct_change = (price_change / prev_price) * 100 if prev_price > 0 else 0.0
 
-                    current_price = int(raw_current) if not pd.isna(raw_current) else 0
-                    prev_price = int(raw_prev) if not pd.isna(raw_prev) else current_price
-                    price_change = current_price - prev_price
-                    pct_change = (price_change / prev_price) * 100 if prev_price > 0 else 0.0
+                    raw_volume = df["Volume"].iloc[-1]
                     volume = int(raw_volume) if not pd.isna(raw_volume) else 0
 
                     # 5일, 20일, 60일, 112일, 224일 이동평균선 산출
@@ -728,8 +774,6 @@ with tab_analysis:
                         if not pd.isna(df["RSI"].iloc[-1])
                         else 50.0
                     )
-
-                    naver_data = get_naver_financial_data(pure_code)
 
                     sector = info.get("sector", "국내 상장 주식 / 금융 섹터")
                     raw_summary = info.get("longBusinessSummary", "기업 비즈니스 개요")
@@ -802,7 +846,7 @@ with tab_analysis:
                     sign = "+" if price_change > 0 else ""
 
                     c1.markdown(
-                        f"""<div class="metric-card"><div class="metric-title">실시간 주가</div>
+                        f"""<div class="metric-card"><div class="metric-title">현재가 / 마감종가</div>
                     <div class="metric-value" style="color:{color_style};">{current_price:,}원 <span style="font-size:0.7rem; font-weight:normal;">({sign}{pct_change:.2f}%)</span></div></div>""",
                         unsafe_allow_html=True,
                     )
