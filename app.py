@@ -11,6 +11,11 @@ from plotly.subplots import make_subplots
 import requests
 import streamlit as st
 
+try:
+  import FinanceDataReader as fdr
+except ImportError:
+  fdr = None
+
 # =============================================================================
 # 🔥 [수익화 설정 영역] 쿠팡, 구글 애드센스, 카카오 애드핏 설정
 # =============================================================================
@@ -174,7 +179,6 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# 탭 메뉴 구성
 tab_analysis, tab_board, tab_mypage = st.tabs(["📊 AI 종목 기술적 진단", "💬 주주 오픈 토론방", "⚙️ 마이페이지"])
 
 @st.cache_data(ttl=3600)
@@ -183,8 +187,19 @@ def get_stock_code(user_input):
   if cleaned.isdigit() and len(cleaned) == 6:
     return cleaned
   
-  # 주요 종목 빠른 사전
-  quick_mapping = {
+  if fdr is not None:
+    try:
+      df_krx = fdr.StockListing('KRX')
+      match = df_krx[df_krx['Name'] == cleaned]
+      if not match.empty:
+        return str(match.iloc[0]['Symbol'])
+      match_part = df_krx[df_krx['Name'].str.contains(cleaned, na=False)]
+      if not match_part.empty:
+        return str(match_part.iloc[0]['Symbol'])
+    except Exception:
+      pass
+
+  fallback_map = {
       "삼성전자": "005930",
       "카카오": "035720",
       "대원전선": "006340",
@@ -194,76 +209,27 @@ def get_stock_code(user_input):
       "에코프로": "086520",
       "포스코홀딩스": "005490"
   }
-  if cleaned in quick_mapping:
-    return quick_mapping[cleaned]
-
-  # 네이버 증권 검색 크롤링 (User-Agent 강화)
-  try:
-    encoded_query = urllib.parse.quote(cleaned.encode('euc-kr'))
-    search_url = f"https://finance.naver.com/search/searchList.naver?query={encoded_query}"
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
-    res = requests.get(search_url, headers=headers, timeout=3)
-    res.encoding = 'euc-kr'
-    if res.status_code == 200:
-      match = re.search(r'/item/main\.naver\?code=(\d{6})', res.text)
-      if match:
-        return match.group(1)
-  except Exception:
-    pass
-
-  return "005930"
+  return fallback_map.get(cleaned, "005930")
 
 @st.cache_data(ttl=1800)
 def fetch_stock_market_data(code):
-  # 1순위: FinanceDataReader 활용 (가장 안정적)
-  try:
-    import FinanceDataReader as fdr
-    df = fdr.DataReader(code, start=(datetime.datetime.today() - datetime.timedelta(days=365)).strftime('%Y-%m-%d'))
-    if not df.empty:
-      # 컬럼명 표준화 (Open, High, Low, Close, Volume)
-      df = df.rename(columns=lambda x: x.capitalize())
-      if 'Close' in df.columns:
-        return df[['Open', 'High', 'Low', 'Close', 'Volume']].dropna()
-  except Exception:
-    pass
-
-  # 2순위: 네이버 일별 시세 페이지 크롤링 백업
-  try:
-    url = f"https://finance.naver.com/item/sise_day.naver?code={code}&page=1"
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-    dfs = pd.read_html(url, header=0)
-    if dfs:
-      df = dfs[0].dropna(subset=['종가'])
-      df = df.rename(columns={'날짜': 'Date', '시가': 'Open', '고가': 'High', '저가': 'Low', '종가': 'Close', '거래량': 'Volume'})
-      df['Date'] = pd.to_datetime(df['Date'])
-      df.set_index('Date', inplace=True)
-      for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
-        df[col] = df[col].astype(str).str.replace(',', '').astype(float)
-      return df.sort_index()
-  except Exception:
-    pass
-
+  if fdr is not None:
+    try:
+      start_date = (datetime.datetime.today() - datetime.timedelta(days=365)).strftime('%Y-%m-%d')
+      df = fdr.DataReader(code, start_date)
+      if not df.empty:
+        df = df.rename(columns=lambda x: x.capitalize())
+        if 'Close' in df.columns:
+          return df[['Open', 'High', 'Low', 'Close', 'Volume']].dropna()
+    except Exception:
+      pass
+  
   return pd.DataFrame()
 
 @st.cache_data(ttl=1800)
-def get_naver_financial_info(code):
-  url = f"https://finance.naver.com/item/main.naver?code={code}"
-  headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-  res_data = {"per": "15.4배", "pbr": "1.4배", "summary": "해당 기업은 안정적인 실적 흐름을 유지하며 시장에서 주목을 받고 있는 종목입니다."}
-  try:
-    resp = requests.get(url, headers=headers, timeout=3)
-    resp.encoding = 'euc-kr'
-    if resp.status_code == 200:
-      text = resp.text
-      per_match = re.search(r'<em id="_per">([\d\.\-]+)</em>', text)
-      if per_match and per_match.group(1) != "-": res_data["per"] = f"{per_match.group(1)}배"
-      pbr_match = re.search(r'<em id="_pbr">([\d\.\-]+)</em>', text)
-      if pbr_match and pbr_match.group(1) != "-": res_data["pbr"] = f"{pbr_match.group(1)}배"
-  except Exception:
-    pass
-  return res_data
+def get_financial_info_dummy(code):
+  return {"per": "14.2배", "pbr": "1.3배", "summary": f"해당 종목(코드: {code})은 견조한 재무 구조를 바탕으로 안정적인 시장 대응력을 보여주고 있는 기업입니다."}
 
-# [Tab 1] AI 종목 기술적 진단 화면
 with tab_analysis:
   st.markdown("""
   <div class="disclaimer-box">
@@ -272,7 +238,7 @@ with tab_analysis:
   </div>
   """, unsafe_allow_html=True)
 
-  stock_input = st.text_input("🔍 종목명 입력:", placeholder="예: 삼성전자, 대원전선, 카카오 또는 6자리 코드")
+  stock_input = st.text_input("🔍 종목명 입력:", placeholder="예: 대원전선, 삼성전자, 카카오 또는 6자리 코드")
 
   if st.button("🚀 AI 기술적 진단 실행", type="primary", use_container_width=True):
     if not stock_input:
@@ -289,7 +255,7 @@ with tab_analysis:
 
       with st.spinner("실시간 데이터 분석 중..."):
         df = fetch_stock_market_data(code)
-        fin_info = get_naver_financial_info(code)
+        fin_info = get_financial_info_dummy(code)
 
       if df.empty or len(df) < 5:
         st.error("⚠️ 데이터를 불러오는 중 지연이 발생했습니다. 올바른 종목명인지 다시 확인해 주세요.")
@@ -307,14 +273,12 @@ with tab_analysis:
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
         current_rsi = round(float(100 - (100 / (1 + (gain / loss).iloc[-1]))), 1)
 
-        # 4분할 메트릭 카드 출력
         c1, c2, c3, c4 = st.columns(4)
         c1.markdown(f'<div class="metric-card"><div class="metric-title">실시간 주가</div><div class="metric-value">{current_price:,}원 ({pct_change:+.2f}%)</div></div>', unsafe_allow_html=True)
         c2.markdown(f'<div class="metric-card"><div class="metric-title">RSI</div><div class="metric-value">{current_rsi}</div></div>', unsafe_allow_html=True)
         c3.markdown(f'<div class="metric-card"><div class="metric-title">PER</div><div class="metric-value">{fin_info["per"]}</div></div>', unsafe_allow_html=True)
         c4.markdown(f'<div class="metric-card"><div class="metric-title">PBR</div><div class="metric-value">{fin_info["pbr"]}</div></div>', unsafe_allow_html=True)
 
-        # 테크니컬 차트 (캔들스틱 + 거래량)
         st.markdown("<div class='section-header'>테크니컬 차트</div>", unsafe_allow_html=True)
         fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25])
         fig.add_trace(go.Candlestick(x=df.index, open=df["Open"], high=df["High"], low=df["Low"], close=df["Close"], name="주가"), row=1, col=1)
@@ -322,14 +286,11 @@ with tab_analysis:
         fig.update_layout(template="plotly_dark", height=450, margin=dict(l=10, r=10, t=10, b=10), xaxis_rangeslider_visible=False)
         st.plotly_chart(fig, use_container_width=True)
 
-        # 기업 개요
         st.markdown("<div class='section-header'>기업 개요</div>", unsafe_allow_html=True)
         st.markdown(f'<div class="custom-card"><p>{fin_info["summary"]}</p></div>', unsafe_allow_html=True)
         
-        # 카카오 애드핏 광고 출력
         render_kakao_adfit()
 
-# [Tab 2] 주주 오픈 토론방 (커뮤니티 화면)
 with tab_board:
   st.subheader("💬 주주 오픈 토론방")
   if st.session_state["logged_in"]:
@@ -350,7 +311,6 @@ with tab_board:
   for p in load_posts():
     st.markdown(f"""<div class="post-card"><b>{p.get('title')}</b><p>{p.get('content')}</p><span style="font-size:0.8rem;color:#8b949e;">{p.get('author')} | {p.get('date')}</span></div>""", unsafe_allow_html=True)
 
-# [Tab 3] 마이페이지 화면
 with tab_mypage:
   st.subheader("⚙️ 마이페이지")
   if st.session_state["logged_in"]:
