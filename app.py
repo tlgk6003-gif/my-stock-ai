@@ -19,7 +19,8 @@ import yfinance as yf
 COUPANG_LINK = "https://link.coupang.com/a/fAS0LGAFK8"
 GOOGLE_ADSENSE_CLIENT = "ca-pub-XXXXXXXXXXXXXXXX" 
 GOOGLE_ADSENSE_SLOT = "1234567890"
-KAKAO_ADFIT_UNIT = "dan-XXXXXXXXXXXXXXXX"
+# 방금 발급받으신 카카오 애드핏 광고 단위 ID 입력 완료
+KAKAO_ADFIT_UNIT = "DAN-W4CcfdCUtd8S6CN5"
 FIREBASE_URL = "https://mystockcommunity-dd967-default-rtdb.firebaseio.com/"
 
 def hash_password(password):
@@ -105,17 +106,18 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# 300x250 규격에 맞춘 카카오 애드핏 렌더링 함수
 def render_kakao_adfit():
   adfit_html = f"""
     <div style="text-align:center; margin: 20px 0; background: #161b22; padding: 15px; border-radius: 10px; border: 1px solid #30363d;">
         <ins class="kakao_ad_area" style="display:none;"
-             data-kakao_ad_unit="{KAKAO_ADFIT_UNIT}"
-             data-kakao_ad_width="320"
-             data-kakao_ad_height="50"></ins>
+             data-ad-unit="{KAKAO_ADFIT_UNIT}"
+             data-ad-width="300"
+             data-ad-height="250"></ins>
         <script type="text/javascript" src="//t1.daumcdn.net/kas/static/ba.min.js" async></script>
     </div>
     """
-  st.components.v1.html(adfit_html, height=90)
+  st.components.v1.html(adfit_html, height=290)
 
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
 if "user_id" not in st.session_state: st.session_state["user_id"] = ""
