@@ -32,7 +32,7 @@ if st.button("🚀 실시간 정밀 분석 시작", type="primary"):
                 genai.configure(api_key=api_key)
                 
                 # 구글 표준 정식 지원 모델명 사용
-                model = genai.GenerativeModel("gemini-2.0-flash")
+                model = genai.GenerativeModel("gemini-1.0-pro")
 
                 prompt = f"""
 너는 KOSPI/KOSDAQ 분석 전문 트레이더이자 리서치 애널리스트야.
