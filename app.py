@@ -360,7 +360,7 @@ tab_analysis, tab_board, tab_mypage = st.tabs(
 
 
 # -----------------------------------------------------------------------------
-# 2. KRX 전 종목 자동 연동 및 검색 엔진 (세션 차단 우회 기능 포함)
+# 2. KRX 전 종목 자동 연동 및 검색 엔진 (세션 차단 우회 및 한글 티커 방지 포함)
 # -----------------------------------------------------------------------------
 @st.cache_data(ttl=86400)
 def get_krx_stock_master():
@@ -465,21 +465,36 @@ def fetch_realtime_news(query_term):
 
 @st.cache_data(ttl=300)
 def fetch_stock_history(ticker_symbol):
+    # 한글 티커가 들어와 야후 파이낸스 404 에러가 나는 것을 방지하는 정화 로직
+    clean_symbol = ticker_symbol
+    if any(ord(c) >= 128 for c in ticker_symbol):
+        if "." in ticker_symbol:
+            code_part = ticker_symbol.split(".")[0]
+            market_part = ticker_symbol.split(".")[1]
+            found = search_naver_stock_code(code_part)
+            if found:
+                clean_symbol = f"{found}.{market_part}"
+            else:
+                clean_symbol = f"005930.{market_part}"
+        else:
+            found = search_naver_stock_code(ticker_symbol)
+            clean_symbol = f"{found}.KS" if found else "005930.KS"
+
     # 야후 파이낸스 차단 우회를 위한 커스텀 세션 헤더 장착
     session = Session()
     session.headers.update({
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     })
     
-    stock = yf.Ticker(ticker_symbol, session=session)
+    stock = yf.Ticker(clean_symbol, session=session)
     df = stock.history(period="1y")
     if df.empty:
-        if ticker_symbol.endswith(".KS"):
-            alt_symbol = ticker_symbol.replace(".KS", ".KQ")
+        if clean_symbol.endswith(".KS"):
+            alt_symbol = clean_symbol.replace(".KS", ".KQ")
             stock = yf.Ticker(alt_symbol, session=session)
             df = stock.history(period="1y")
-        elif ticker_symbol.endswith(".KQ"):
-            alt_symbol = ticker_symbol.replace(".KQ", ".KS")
+        elif clean_symbol.endswith(".KQ"):
+            alt_symbol = clean_symbol.replace(".KQ", ".KS")
             stock = yf.Ticker(alt_symbol, session=session)
             df = stock.history(period="1y")
     return df, stock.info
@@ -544,7 +559,10 @@ def get_ticker_symbol_and_code(user_input):
         except:
             return f"{found_code}.KQ", found_code
 
-    return f"{cleaned_input}.KQ", cleaned_input
+    if cleaned_input.isdigit() and len(cleaned_input) == 6:
+        return f"{cleaned_input}.KS", cleaned_input
+
+    return "005930.KS", "005930"
 
 
 @st.cache_data(ttl=3600)
