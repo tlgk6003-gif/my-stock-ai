@@ -11,10 +11,7 @@ st.caption(
 )
 
 # API 키 설정
-api_key = st.sidebar.text_input("Groq API Key를 입력하세요:", type="password")
-st.sidebar.markdown(
-    "[Groq API Key 무료 발급 링크](https://console.groq.com/keys)"
-)
+api_key = "gsk_AQ.Ab8RN6LosXDqkaHE_mmN_6ExoEVU4IjYuEL4zfzg1c6K5oiE6g"
 
 stock_name = st.text_input(
     "분석할 종목명 또는 종목코드를 입력하세요:",
