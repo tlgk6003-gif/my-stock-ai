@@ -11,7 +11,7 @@ st.caption(
 )
 
 # API 키 설정
-api_key = "gsk_AQ.Ab8RN6LosXDqkaHE_mmN_6ExoEVU4IjYuEL4zfzg1c6K5oiE6g"
+api_key = "gsk_AQ.Ab8RN6JKlSVT02qMX1XmCnX7sY8brDYcWfcmj8ZcSM5sl047xA"
 
 stock_name = st.text_input(
     "분석할 종목명 또는 종목코드를 입력하세요:",
