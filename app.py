@@ -3,6 +3,7 @@ import json
 import re
 import urllib.parse
 import xml.etree.ElementTree as ET
+from deep_translator import GoogleTranslator
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -306,36 +307,59 @@ def fetch_realtime_news(query_term):
 def fetch_stock_history(ticker_symbol):
   stock = yf.Ticker(ticker_symbol)
   df = stock.history(period="1y")
-  if df.empty and ticker_symbol.endswith(".KS"):
-    ticker_symbol = ticker_symbol.replace(".KS", ".KQ")
-    stock = yf.Ticker(ticker_symbol)
-    df = stock.history(period="1y")
+  if df.empty:
+    if ticker_symbol.endswith(".KS"):
+      alt_symbol = ticker_symbol.replace(".KS", ".KQ")
+      stock = yf.Ticker(alt_symbol)
+      df = stock.history(period="1y")
+    elif ticker_symbol.endswith(".KQ"):
+      alt_symbol = ticker_symbol.replace(".KQ", ".KS")
+      stock = yf.Ticker(alt_symbol)
+      df = stock.history(period="1y")
   return df, stock.info
 
 
 def get_ticker_symbol_and_code(user_input):
   user_input = user_input.strip()
   if user_input.isdigit() and len(user_input) == 6:
-    return f"{user_input}.KS", user_input
+    return f"{user_input}.KQ", user_input
+
   mapping = {
-      "삼성전자": "005930",
-      "SK하이닉스": "000660",
-      "대원전선": "006340",
-      "한화오션": "042660",
-      "LG에너지솔루션": "373220",
-      "현대차": "005380",
-      "POSCO홀딩스": "005490",
-      "에코프로비엠": "247540",
-      "에코프로": "086520",
-      "알테오젠": "196170",
-      "HLB": "028300",
+      "삼성전자": ("005930.KS", "005930"),
+      "SK하이닉스": ("000660.KS", "000660"),
+      "대원전선": ("006340.KS", "006340"),
+      "한화오션": ("042660.KS", "042660"),
+      "LG에너지솔루션": ("373220.KS", "373220"),
+      "현대차": ("005380.KS", "005380"),
+      "POSCO홀딩스": ("005490.KS", "005490"),
+      "에코프로비엠": ("247540.KQ", "247540"),
+      "에코프로": ("086520.KQ", "086520"),
+      "알테오젠": ("196170.KQ", "196170"),
+      "HLB": ("028300.KQ", "028300"),
+      "에이스테크": ("088800.KQ", "088800"),
+      "필에너지": ("378340.KQ", "378340"),
   }
-  code = mapping.get(user_input, user_input)
-  return f"{code}.KS", code
+
+  if user_input in mapping:
+    return mapping[user_input]
+
+  return f"{user_input}.KQ", user_input
+
+
+# 영문 요약을 한국어로 번역해 주는 함수
+@st.cache_data(ttl=3600)
+def translate_to_ko(text):
+  if not text or text == "기업 비즈니스 개요":
+    return "제공된 기업 요약 정보가 없습니다."
+  try:
+    translated = GoogleTranslator(source="auto", target="ko").translate(text)
+    return translated
+  except Exception:
+    return text  # 번역 실패 시 원문 반환
 
 
 # =============================================================================
-# 🟢 AI 퀀트 정수 및 진단 산출 함수 (1번 수정 반영)
+# 🟢 AI 퀀트 정수 및 진단 산출 함수
 # =============================================================================
 def calculate_quant_score_and_diagnosis(
     info, df, current_rsi, final_per_val, final_pbr_val, final_roe_val
@@ -420,7 +444,7 @@ with tab_analysis:
 
   stock_input = st.text_input(
       "🔍 분석 대상 종목명 또는 6자리 종목코드를 입력하세요:",
-      placeholder="예: 삼성전자, 대원전선, SK하이닉스, 005930",
+      placeholder="예: 삼성전자, 에이스테크, 필에너지, 088800",
   )
 
   if st.button(
@@ -485,7 +509,9 @@ with tab_analysis:
           naver_data = get_naver_financial_data(pure_code)
 
           sector = info.get("sector", "핵심 성장 섹터")
-          summary = info.get("longBusinessSummary", "기업 비즈니스 개요")
+          raw_summary = info.get("longBusinessSummary", "기업 비즈니스 개요")
+          # 영어 요약을 한국어로 번역
+          summary = translate_to_ko(raw_summary)
 
           yf_per = info.get("trailingPE")
           yf_pbr = info.get("priceToBook")
@@ -607,7 +633,7 @@ with tab_analysis:
                   <li><b>핵심 섹터:</b> {sector}</li>
                   <li><b>시장 지위:</b> 해당 산업군 내 주력 플레이어</li>
               </ul>
-              <p style="color:#8b949e; font-size:0.9rem; margin-top:12px;"><b>주요 사업 요약:</b> {summary[:280]}...</p>
+              <p style="color:#8b949e; font-size:0.9rem; margin-top:12px;"><b>주요 사업 요약:</b> {summary[:350]}...</p>
           </div>
           """,
               unsafe_allow_html=True,
@@ -757,7 +783,7 @@ with tab_analysis:
 
 
 # =============================================================================
-# 🟢 TAB 2: 자유 게시판 커뮤니티 화면 (좋아요 & 댓글 시스템 반영)
+# 🟢 TAB 2: 자유 게시판 커뮤니티 화면
 # =============================================================================
 with tab_board:
   st.subheader("💬 주주 오픈 토론방")
@@ -776,7 +802,7 @@ with tab_board:
       )
       category = col_f3.selectbox(
           "관련 종목/분류",
-          ["자유토론", "삼성전자", "SK하이닉스", "대원전선", "국장종목", "미장종목"],
+          ["자유토론", "삼성전자", "에이스테크", "필에너지", "국장종목", "미장종목"],
       )
 
       title = st.text_input("글 제목", placeholder="제목을 입력하세요")
@@ -812,7 +838,7 @@ with tab_board:
 
   st.markdown("---")
 
-  # 2. 게시글 목록 출력 (좋아요 및 댓글 인터랙션)
+  # 2. 게시글 목록 출력
   posts = load_posts()
 
   if not posts:
