@@ -14,7 +14,7 @@ st.caption(
 try:
     api_key = st.secrets["GEMINI_API_KEY"].strip()
 except Exception:
-    api_key = "AQ.Ab8RN6KXZqLFBB37T-BOxUWQdpQ0tYAL_1rD0SWujs9Po0zIVQ"
+    api_key = "AQ.Ab8RN6Kcmj--YD2ag_auIYRBYM9cA6ufwmqJc7cBRwEbmbrwcw"
 
 stock_name = st.text_input(
     "분석할 종목명 또는 종목코드를 입력하세요:",
