@@ -339,7 +339,7 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown(
-        "<div style='font-size:0.8rem; color:#8b949e;'>⚡ AI 주식분석 플랫폼 v3.6<br>© 2026 Stock Community</div>",
+        "<div style='font-size:0.8rem; color:#8b949e;'>⚡ AI 주식분석 플랫폼 v3.7<br>© 2026 Stock Community</div>",
         unsafe_allow_html=True,
     )
 
@@ -505,6 +505,21 @@ def fetch_realtime_news(query_term):
 def get_ticker_symbol_and_code(user_input):
     cleaned_input = user_input.strip()
 
+    # 0. 주요 종목 수동 매핑 사전 등록 (카카오, 대원전선 등 코스피/코스닥 오류 방지)
+    special_mapping = {
+        "카카오": ("035720.KS", "035720"),
+        "대원전선": ("006340.KS", "006340"),
+        "삼성전자": ("005930.KS", "005930"),
+        "에코프로": ("086520.KQ", "086520"),
+        "이에이트": ("418620.KQ", "418620"),
+        "스타코링크": ("060240.KQ", "060240"),
+        "NAVER": ("035420.KS", "035420"),
+        "네이버": ("035420.KS", "035420"),
+        "셀트리온": ("068270.KS", "068270"),
+    }
+    if cleaned_input in special_mapping:
+        return special_mapping[cleaned_input]
+
     # 1. 6자리 숫자로 입력된 경우
     if cleaned_input.isdigit() and len(cleaned_input) == 6:
         test_url = f"https://finance.naver.com/item/main.naver?code={cleaned_input}"
@@ -534,7 +549,7 @@ def get_ticker_symbol_and_code(user_input):
             except:
                 return f"{code}.KS", code
 
-    # 3. 네이버 자동완성 API 검색 활용 (한글 명칭 검색 핵심)
+    # 3. 네이버 자동완성 API 검색 활용
     found_code = search_naver_stock_code(cleaned_input)
     if found_code:
         test_url = f"https://finance.naver.com/item/main.naver?code={found_code}"
@@ -547,18 +562,7 @@ def get_ticker_symbol_and_code(user_input):
         except:
             return f"{found_code}.KS", found_code
 
-    # 4. 특수 종목 매핑 (대원전선 등 예외 케이스 완벽 대응)
-    special_mapping = {
-        "대원전선": ("006340.KS", "006340"),
-        "삼성전자": ("005930.KS", "005930"),
-        "에코프로": ("086520.KQ", "086520"),
-        "이에이트": ("418620.KQ", "418620"),
-        "스타코링크": ("060240.KQ", "060240"),
-    }
-    if cleaned_input in special_mapping:
-        return special_mapping[cleaned_input]
-
-    # 5. 검색 실패 시 입력값 기반 폴백 방지 (기본값 강제 지정 대신 입력값 반영)
+    # 4. 최종 폴백 (입력값을 그대로 사용하되 기본 코스피 지정)
     return f"{cleaned_input}.KS", cleaned_input
 
 
@@ -690,7 +694,7 @@ with tab_analysis:
 
     stock_input = st.text_input(
         "🔍 분석 대상 종목명 또는 6자리 종목코드를 입력하세요 (국내 전종목 연동완료):",
-        placeholder="예: 대원전선, 삼성전자, 006340",
+        placeholder="예: 카카오, 대원전선, 삼성전자, 006340",
     )
 
     if st.button(
@@ -729,7 +733,7 @@ with tab_analysis:
                 if df is None or df.empty:
                     st.error(
                         f"⚠️ [{stock_input}] (티커: {ticker_symbol}) 종목의 데이터를 불러오지 못했습니다.<br>"
-                        "정확한 국내 종목명(예: 대원전선, 삼성전자) 또는 6자리 종목코드(예: 006340)를 다시 확인해 주세요.",
+                        "정확한 국내 종목명(예: 카카오, 대원전선) 또는 6자리 종목코드(예: 035720)를 다시 확인해 주세요.",
                         icon="🚨"
                     )
                 else:
