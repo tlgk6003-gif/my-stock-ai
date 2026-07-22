@@ -11,10 +11,8 @@ st.caption(
     " 세팅 제공"
 )
 
-try:
-    hf_token = st.secrets["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"].strip()
-except Exception:
-    hf_token = ""
+# Secrets를 거치지 않고 방금 발급받으신 토큰을 직접 적용
+hf_token = "hf_dJQLWjUnhTqgOMEiJlJaKXGsqChdixOFS"
 
 stock_name = st.text_input(
     "분석할 종목명 또는 종목코드를 입력하세요:",
@@ -22,9 +20,7 @@ stock_name = st.text_input(
 )
 
 if st.button("🚀 실시간 정밀 분석 시작", type="primary"):
-    if not hf_token:
-        st.error("Streamlit Secrets에 HF_TOKEN이 설정되지 않았습니다!")
-    elif not stock_name:
+    if not stock_name:
         st.warning("분석할 종목명을 입력해주세요.")
     else:
         with st.spinner(f"'{stock_name}' 종목 정밀 분석 보고서 생성 중..."):
