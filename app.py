@@ -13,16 +13,9 @@ import streamlit as st
 import yfinance as yf
 
 # =============================================================================
-# 🔥 [수익화 설정 영역] 쿠팡, 구글 애드센스, 카카오 애드핏 설정
+# 🔥 [수익화 설정] 쿠팡 파트너스 링크
 # =============================================================================
 COUPANG_LINK = "https://link.coupang.com/a/fAS0LGAFK8"
-
-# [구글 애드센스 설정] - 애드센스 승인 후 본인의 퍼블리셔 ID와 광고 단위 ID로 변경하세요
-GOOGLE_ADSENSE_CLIENT = "ca-pub-XXXXXXXXXXXXXXXX" 
-GOOGLE_ADSENSE_SLOT = "1234567890"
-
-# [카카오 애드핏 설정] - 애드핏 승인 후 본인의 광고 unit ID로 변경하세요
-KAKAO_ADFIT_UNIT = "dan-XXXXXXXXXXXXXXXX"
 
 # Firebase 실시간 데이터베이스 URL
 FIREBASE_URL = "https://mystockcommunity-dd967-default-rtdb.firebaseio.com/"
@@ -88,7 +81,7 @@ def save_user_to_firebase(user_id, user_data):
 
 
 # -----------------------------------------------------------------------------
-# 1. 페이지 설정 & 증권사 MTS/HTS 스타일 커스텀 CSS 및 광고 컴포넌트
+# 1. 페이지 설정 & 증권사 MTS/HTS 스타일 커스텀 CSS
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="AI주식분석",
@@ -254,40 +247,9 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-
-# HTML 기반 광고 렌더링 헬퍼 함수
-def render_google_adsense():
-  adsense_html = f"""
-    <div style="text-align:center; margin: 20px 0; background: #161b22; padding: 15px; border-radius: 10px; border: 1px solid #30363d;">
-        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={GOOGLE_ADSENSE_CLIENT}" crossorigin="anonymous"></script>
-        <ins class="adsbygoogle"
-             style="display:block"
-             data-ad-client="{GOOGLE_ADSENSE_CLIENT}"
-             data-ad-slot="{GOOGLE_ADSENSE_SLOT}"
-             data-ad-format="auto"
-             data-full-width-responsive="true"></ins>
-        <script>
-             (adsbygoogle = window.adsbygoogle || []).push({{}});
-        </script>
-    </div>
-    """
-  st.components.v1.html(adsense_html, height=120)
-
-
-def render_kakao_adfit():
-  adfit_html = f"""
-    <div style="text-align:center; margin: 20px 0; background: #161b22; padding: 15px; border-radius: 10px; border: 1px solid #30363d;">
-        <ins class="kakao_ad_area" style="display:none;"
-             data-kakao_ad_unit="{KAKAO_ADFIT_UNIT}"
-             data-kakao_ad_width="320"
-             data-kakao_ad_height="50"></ins>
-        <script type="text/javascript" src="//t1.daumcdn.net/kas/static/ba.min.js" async></script>
-    </div>
-    """
-  st.components.v1.html(adfit_html, height=90)
-
-
+# -----------------------------------------------------------------------------
 # 세션 상태 초기화
+# -----------------------------------------------------------------------------
 if "logged_in" not in st.session_state:
   st.session_state["logged_in"] = False
 if "user_id" not in st.session_state:
@@ -376,7 +338,7 @@ with st.sidebar:
 
   st.markdown("---")
   st.markdown(
-      "<div style='font-size:0.8rem; color:#8b949e;'>⚡ AI 주식분석 플랫폼 v3.3<br>© 2026 Stock Community</div>",
+      "<div style='font-size:0.8rem; color:#8b949e;'>⚡ AI 주식분석 플랫폼 v3.1<br>© 2026 Stock Community</div>",
       unsafe_allow_html=True,
   )
 
@@ -397,10 +359,11 @@ tab_analysis, tab_board, tab_mypage = st.tabs(
 
 
 # -----------------------------------------------------------------------------
-# 2. KRX 전 종목 자동 연동 및 검색 엔진 (사명 변경 예외 사전 완벽 보완)
+# 2. KRX 전 종목 자동 연동 및 검색 엔진 (의존성 오류 원천 차단)
 # -----------------------------------------------------------------------------
 @st.cache_data(ttl=86400)
 def get_krx_stock_master():
+  """KRX 상장된 모든 코스피/코스닥 종목의 명칭과 코드를 동적으로 불러옴"""
   try:
     url = "https://kind.krx.co.kr/corpgeneral/corpList.do?method=download&searchType=13"
     df = pd.read_html(url, header=0)[0]
@@ -519,6 +482,7 @@ def fetch_stock_history(ticker_symbol):
 def get_ticker_symbol_and_code(user_input):
   cleaned_input = user_input.strip()
 
+  # 1. 6자리 숫자로 직접 입력한 경우
   if cleaned_input.isdigit() and len(cleaned_input) == 6:
     test_url = f"https://finance.naver.com/item/main.naver?code={cleaned_input}"
     try:
@@ -535,19 +499,7 @@ def get_ticker_symbol_and_code(user_input):
     except:
       return f"{cleaned_input}.KQ", cleaned_input
 
-  # 🌟 사명 변경 및 이슈 종목 빠른 매핑 사전 (형지글로벌 등 최신 반영)
-  special_mapping = {
-      "형지글로벌": ("011080.KS", "011080"),
-      "형지아이앤씨": ("011080.KS", "011080"),
-      "형지I&C": ("011080.KS", "011080"),
-      "e8": ("418620.KQ", "418620"),
-      "E8": ("418620.KQ", "418620"),
-      "이에이트": ("418620.KQ", "418620"),
-      "스타코링크": ("060240.KQ", "060240"),
-  }
-  if cleaned_input.lower() in special_mapping:
-    return special_mapping[cleaned_input.lower()]
-
+  # 2. KRX 전체 종목 마스터에서 회사명으로 일치하는 코드 검색
   krx_df = get_krx_stock_master()
   if not krx_df.empty:
     matched = krx_df[krx_df["회사명"].str.lower() == cleaned_input.lower()]
@@ -565,6 +517,17 @@ def get_ticker_symbol_and_code(user_input):
       except:
         return f"{code}.KQ", code
 
+  # 3. 특수 영문/별칭 매핑 예외 처리 (E8, 스타코링크 등)
+  special_mapping = {
+      "e8": ("418620.KQ", "418620"),
+      "E8": ("418620.KQ", "418620"),
+      "이에이트": ("418620.KQ", "418620"),
+      "스타코링크": ("060240.KQ", "060240"),
+  }
+  if cleaned_input.lower() in special_mapping:
+    return special_mapping[cleaned_input.lower()]
+
+  # 4. 네이버 금융 자동완성 API 조회
   found_code = search_naver_stock_code(cleaned_input)
   if found_code:
     test_url = f"https://finance.naver.com/item/main.naver?code={found_code}"
@@ -676,7 +639,7 @@ with tab_analysis:
 
   stock_input = st.text_input(
       "🔍 분석 대상 종목명 또는 6자리 종목코드를 입력하세요 (국내 전종목 연동완료):",
-      placeholder="예: 형지글로벌, 삼성전자, 스타코링크, E8, 011080",
+      placeholder="예: 삼성전자, 스타코링크, E8, 에코프로, 005930",
   )
 
   if st.button(
@@ -704,8 +667,6 @@ with tab_analysis:
       """,
           unsafe_allow_html=True,
       )
-      
-      render_google_adsense()
 
       try:
         with st.spinner(
@@ -1010,8 +971,6 @@ with tab_analysis:
               """,
                   unsafe_allow_html=True,
               )
-              
-          render_kakao_adfit()
 
       except Exception as e:
         st.error(f"⚠️ 데이터 처리 중 오류가 발생했습니다: {e}")
