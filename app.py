@@ -11,11 +11,6 @@ from plotly.subplots import make_subplots
 import requests
 import streamlit as st
 
-try:
-  import FinanceDataReader as fdr
-except ImportError:
-  fdr = None
-
 # =============================================================================
 # 🔥 [수익화 설정 영역] 쿠팡, 구글 애드센스, 카카오 애드핏 설정
 # =============================================================================
@@ -187,18 +182,21 @@ def get_stock_code(user_input):
   if cleaned.isdigit() and len(cleaned) == 6:
     return cleaned
   
-  if fdr is not None:
-    try:
-      df_krx = fdr.StockListing('KRX')
-      match = df_krx[df_krx['Name'] == cleaned]
-      if not match.empty:
-        return str(match.iloc[0]['Symbol'])
-      match_part = df_krx[df_krx['Name'].str.contains(cleaned, na=False)]
-      if not match_part.empty:
-        return str(match_part.iloc[0]['Symbol'])
-    except Exception:
-      pass
+  # 네이버 금융 검색 페이지 실시간 크롤링 (기본 라이브러리 활용)
+  try:
+    encoded_query = urllib.parse.quote(cleaned.encode('euc-kr'))
+    search_url = f"https://finance.naver.com/search/searchList.naver?query={encoded_query}"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    res = requests.get(search_url, headers=headers, timeout=3)
+    res.encoding = 'euc-kr'
+    if res.status_code == 200:
+      match = re.search(r'/item/main\.naver\?code=(\d{6})', res.text)
+      if match:
+        return match.group(1)
+  except Exception:
+    pass
 
+  # 빠른 매핑 백업
   fallback_map = {
       "삼성전자": "005930",
       "카카오": "035720",
@@ -213,22 +211,78 @@ def get_stock_code(user_input):
 
 @st.cache_data(ttl=1800)
 def fetch_stock_market_data(code):
-  if fdr is not None:
-    try:
-      start_date = (datetime.datetime.today() - datetime.timedelta(days=365)).strftime('%Y-%m-%d')
-      df = fdr.DataReader(code, start_date)
-      if not df.empty:
-        df = df.rename(columns=lambda x: x.capitalize())
-        if 'Close' in df.columns:
-          return df[['Open', 'High', 'Low', 'Close', 'Volume']].dropna()
-    except Exception:
-      pass
-  
+  # 1순위: 네이버 일별 시세 테이블 크롤링 (외부 패키지 불필요)
+  try:
+    url = f"https://finance.naver.com/item/sise_day.naver?code={code}&page=1"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    
+    rows = []
+    # 최신 데이터부터 약 3페이지(약 30거래일 이상) 수집
+    for page in range(1, 4):
+      page_url = f"https://finance.naver.com/item/sise_day.naver?code={code}&page={page}"
+      res = requests.get(page_url, headers=headers, timeout=3)
+      if res.status_code == 200:
+        dfs = pd.read_html(res.text, header=0)
+        if dfs:
+          df_page = dfs[0].dropna(subset=['종가'])
+          if not df_page.empty:
+            rows.append(df_page)
+    
+    if rows:
+      df = pd.concat(rows, ignore_index=True)
+      df = df.rename(columns={'날짜': 'Date', '시가': 'Open', '고가': 'High', '저가': 'Low', '종가': 'Close', '거래량': 'Volume'})
+      df['Date'] = pd.to_datetime(df['Date'])
+      df.set_index('Date', inplace=True)
+      for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
+        df[col] = df[col].astype(str).str.replace(',', '').astype(float)
+      return df.sort_index().dropna()
+  except Exception:
+    pass
+
+  # 2순위: 네이버 차트 API (JSON) 직접 호출
+  try:
+    url = f"https://fchart.stock.naver.com/sise.nhn?symbol={code}&timeframe=day&count=100&type=json"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    res = requests.get(url, headers=headers, timeout=3)
+    if res.status_code == 200:
+      data = res.json()
+      item_data = data.get("itemData", [])
+      if item_data:
+        chart_rows = []
+        for item in item_data:
+          chart_rows.append({
+              "Date": pd.to_datetime(str(item[0]), format="%Y%m%d"),
+              "Open": float(item[1]),
+              "High": float(item[2]),
+              "Low": float(item[3]),
+              "Close": float(item[4]),
+              "Volume": float(item[5])
+          })
+        df = pd.DataFrame(chart_rows)
+        df.set_index("Date", inplace=True)
+        return df.dropna()
+  except Exception:
+    pass
+
   return pd.DataFrame()
 
 @st.cache_data(ttl=1800)
-def get_financial_info_dummy(code):
-  return {"per": "14.2배", "pbr": "1.3배", "summary": f"해당 종목(코드: {code})은 견조한 재무 구조를 바탕으로 안정적인 시장 대응력을 보여주고 있는 기업입니다."}
+def get_naver_financial_info(code):
+  url = f"https://finance.naver.com/item/main.naver?code={code}"
+  headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+  res_data = {"per": "14.2배", "pbr": "1.3배", "summary": "해당 기업은 안정적인 실적 흐름을 유지하며 시장에서 주목을 받고 있는 종목입니다."}
+  try:
+    resp = requests.get(url, headers=headers, timeout=3)
+    resp.encoding = 'euc-kr'
+    if resp.status_code == 200:
+      text = resp.text
+      per_match = re.search(r'<em id="_per">([\d\.\-]+)</em>', text)
+      if per_match and per_match.group(1) != "-": res_data["per"] = f"{per_match.group(1)}배"
+      pbr_match = re.search(r'<em id="_pbr">([\d\.\-]+)</em>', text)
+      if pbr_match and pbr_match.group(1) != "-": res_data["pbr"] = f"{pbr_match.group(1)}배"
+  except Exception:
+    pass
+  return res_data
 
 with tab_analysis:
   st.markdown("""
@@ -255,7 +309,7 @@ with tab_analysis:
 
       with st.spinner("실시간 데이터 분석 중..."):
         df = fetch_stock_market_data(code)
-        fin_info = get_financial_info_dummy(code)
+        fin_info = get_naver_financial_info(code)
 
       if df.empty or len(df) < 5:
         st.error("⚠️ 데이터를 불러오는 중 지연이 발생했습니다. 올바른 종목명인지 다시 확인해 주세요.")
