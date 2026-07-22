@@ -12,7 +12,7 @@ st.caption(
 )
 
 # Secrets를 거치지 않고 방금 발급받으신 토큰을 직접 적용
-hf_token = "hf_dJQLWjUnhTqgOMEiJlJaKXGsqChdixOFS"
+hf_token = "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"
 
 stock_name = st.text_input(
     "분석할 종목명 또는 종목코드를 입력하세요:",
