@@ -339,7 +339,7 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown(
-        "<div style='font-size:0.8rem; color:#8b949e;'>⚡ AI 주식분석 플랫폼 v3.1<br>© 2026 Stock Community</div>",
+        "<div style='font-size:0.8rem; color:#8b949e;'>⚡ AI 주식분석 플랫폼 v3.2<br>© 2026 Stock Community</div>",
         unsafe_allow_html=True,
     )
 
@@ -465,7 +465,6 @@ def fetch_realtime_news(query_term):
 
 @st.cache_data(ttl=300)
 def fetch_stock_history(ticker_symbol):
-    # 한글 티커가 들어와 야후 파이낸스 404 에러가 나는 것을 방지하는 정화 로직
     clean_symbol = ticker_symbol
     if any(ord(c) >= 128 for c in ticker_symbol):
         if "." in ticker_symbol:
@@ -480,7 +479,6 @@ def fetch_stock_history(ticker_symbol):
             found = search_naver_stock_code(ticker_symbol)
             clean_symbol = f"{found}.KS" if found else "005930.KS"
 
-    # 야후 파이낸스 차단 우회를 위한 커스텀 세션 헤더 장착
     session = Session()
     session.headers.update({
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -703,11 +701,16 @@ with tab_analysis:
                         icon="🚨"
                     )
                 else:
-                    current_price = int(df["Close"].iloc[-1])
-                    prev_price = int(df["Close"].iloc[-2])
+                    # 결측치(NaN) 방어 처리가 적용된 수치 데이터 추출
+                    raw_current = df["Close"].iloc[-1]
+                    raw_prev = df["Close"].iloc[-2] if len(df) > 1 else raw_current
+                    raw_volume = df["Volume"].iloc[-1]
+
+                    current_price = int(raw_current) if not pd.isna(raw_current) else 0
+                    prev_price = int(raw_prev) if not pd.isna(raw_prev) else current_price
                     price_change = current_price - prev_price
-                    pct_change = (price_change / prev_price) * 100
-                    volume = int(df["Volume"].iloc[-1])
+                    pct_change = (price_change / prev_price) * 100 if prev_price > 0 else 0.0
+                    volume = int(raw_volume) if not pd.isna(raw_volume) else 0
 
                     df["MA20"] = df["Close"].rolling(window=20).mean()
                     df["MA60"] = df["Close"].rolling(window=60).mean()
