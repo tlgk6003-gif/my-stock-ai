@@ -339,7 +339,7 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown(
-        "<div style='font-size:0.8rem; color:#8b949e;'>⚡ AI 주식분석 플랫폼 v3.2<br>© 2026 Stock Community</div>",
+        "<div style='font-size:0.8rem; color:#8b949e;'>⚡ AI 주식분석 플랫폼 v3.4<br>© 2026 Stock Community</div>",
         unsafe_allow_html=True,
     )
 
@@ -485,16 +485,16 @@ def fetch_stock_history(ticker_symbol):
     })
     
     stock = yf.Ticker(clean_symbol, session=session)
-    df = stock.history(period="1y")
+    df = stock.history(period="2y")  # 224일선 계산을 위해 2년 데이터 조회
     if df.empty:
         if clean_symbol.endswith(".KS"):
             alt_symbol = clean_symbol.replace(".KS", ".KQ")
             stock = yf.Ticker(alt_symbol, session=session)
-            df = stock.history(period="1y")
+            df = stock.history(period="2y")
         elif clean_symbol.endswith(".KQ"):
             alt_symbol = clean_symbol.replace(".KQ", ".KS")
             stock = yf.Ticker(alt_symbol, session=session)
-            df = stock.history(period="1y")
+            df = stock.history(period="2y")
     return df, stock.info
 
 
@@ -701,7 +701,6 @@ with tab_analysis:
                         icon="🚨"
                     )
                 else:
-                    # 결측치(NaN) 방어 처리가 적용된 수치 데이터 추출
                     raw_current = df["Close"].iloc[-1]
                     raw_prev = df["Close"].iloc[-2] if len(df) > 1 else raw_current
                     raw_volume = df["Volume"].iloc[-1]
@@ -712,9 +711,12 @@ with tab_analysis:
                     pct_change = (price_change / prev_price) * 100 if prev_price > 0 else 0.0
                     volume = int(raw_volume) if not pd.isna(raw_volume) else 0
 
+                    # 5일, 20일, 60일, 112일, 224일 이동평균선 산출
+                    df["MA5"] = df["Close"].rolling(window=5).mean()
                     df["MA20"] = df["Close"].rolling(window=20).mean()
                     df["MA60"] = df["Close"].rolling(window=60).mean()
-                    df["MA120"] = df["Close"].rolling(window=120).mean()
+                    df["MA112"] = df["Close"].rolling(window=112).mean()
+                    df["MA224"] = df["Close"].rolling(window=224).mean()
 
                     delta = df["Close"].diff()
                     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
@@ -860,7 +862,7 @@ with tab_analysis:
                     )
 
                     st.markdown(
-                        "<div class='section-header'>2️⃣ 테크니컬 차트 & 이동평균선 분석</div>",
+                        "<div class='section-header'>2️⃣ 테크니컬 차트 & 5/20/60/112/224일 이동평균선 분석</div>",
                         unsafe_allow_html=True,
                     )
                     fig = make_subplots(
@@ -884,6 +886,18 @@ with tab_analysis:
                         row=1,
                         col=1,
                     )
+                    # 5일선
+                    fig.add_trace(
+                        go.Scatter(
+                            x=df.index,
+                            y=df["MA5"],
+                            line=dict(color="#38bdf8", width=1.2),
+                            name="MA 5",
+                        ),
+                        row=1,
+                        col=1,
+                    )
+                    # 20일선
                     fig.add_trace(
                         go.Scatter(
                             x=df.index,
@@ -894,6 +908,7 @@ with tab_analysis:
                         row=1,
                         col=1,
                     )
+                    # 60일선
                     fig.add_trace(
                         go.Scatter(
                             x=df.index,
@@ -904,12 +919,24 @@ with tab_analysis:
                         row=1,
                         col=1,
                     )
+                    # 112일선
                     fig.add_trace(
                         go.Scatter(
                             x=df.index,
-                            y=df["MA120"],
-                            line=dict(color="#2dd4bf", width=1.5),
-                            name="MA 120",
+                            y=df["MA112"],
+                            line=dict(color="#a855f7", width=1.5),
+                            name="MA 112",
+                        ),
+                        row=1,
+                        col=1,
+                    )
+                    # 224일선
+                    fig.add_trace(
+                        go.Scatter(
+                            x=df.index,
+                            y=df["MA224"],
+                            line=dict(color="#2dd4bf", width=1.8),
+                            name="MA 224",
                         ),
                         row=1,
                         col=1,
@@ -931,7 +958,7 @@ with tab_analysis:
                         template="plotly_dark",
                         paper_bgcolor="rgba(0,0,0,0)",
                         plot_bgcolor="rgba(0,0,0,0)",
-                        height=480,
+                        height=500,
                         margin=dict(l=10, r=10, t=10, b=10),
                         xaxis_rangeslider_visible=False,
                     )
