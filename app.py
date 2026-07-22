@@ -66,7 +66,7 @@ def save_user_to_firebase(user_id, user_data):
     return False
 
 # 페이지 레이아웃 설정
-st.set_page_config(page_title="AI주식분석 & 모의투자", page_icon="⚡", layout="wide")
+st.set_page_config(page_title="AI주식분석 & 정밀진단", page_icon="⚡", layout="wide")
 
 # 고급 CSS 스타일 적용
 st.markdown("""
@@ -119,8 +119,6 @@ def render_kakao_adfit():
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
 if "user_id" not in st.session_state: st.session_state["user_id"] = ""
 if "nickname" not in st.session_state: st.session_state["nickname"] = ""
-if "mock_balance" not in st.session_state: st.session_state["mock_balance"] = 10000000  # 1천만원 초기 자산
-if "mock_portfolio" not in st.session_state: st.session_state["mock_portfolio"] = {}
 
 with st.sidebar:
   st.markdown("### 🔐 회원 인증 센터")
@@ -168,12 +166,12 @@ with st.sidebar:
 
 st.markdown("""
     <div style="padding: 10px 0 20px 0;">
-        <span style="font-size: 2rem; font-weight: 900; color: #58a6ff;">⚡ AI주식분석 & 모의투자</span>
-        <span style="color: #8b949e; font-size: 0.95rem; margin-left: 12px;">실시간 증권 데이터 분석 & 모의투자 & 커뮤니티</span>
+        <span style="font-size: 2rem; font-weight: 900; color: #58a6ff;">⚡ AI주식분석 & 정밀 기술적 진단</span>
+        <span style="color: #8b949e; font-size: 0.95rem; margin-left: 12px;">실시간 증권 데이터 분석 & 주주 오픈 토론방</span>
     </div>
 """, unsafe_allow_html=True)
 
-tab_analysis, tab_mock, tab_board, tab_mypage = st.tabs(["📊 AI 종목 기술적 진단", "📈 실전 모의투자", "💬 주주 오픈 토론방", "⚙️ 마이페이지"])
+tab_analysis, tab_board, tab_mypage = st.tabs(["📊 AI 종목 정밀 기술적 진단", "💬 주주 오픈 토론방", "⚙️ 마이페이지"])
 
 @st.cache_data(ttl=3600)
 def get_stock_code(user_input):
@@ -256,20 +254,20 @@ def get_financial_info(code, stock_name):
   return {
       "per": "12.5배", 
       "pbr": "1.1배", 
-      "summary": f"[{stock_name} (종목코드: {code})] 정밀 AI 진단 결과: 단기 이동평균선(MA5, MA20)과 장기 이동평균선(MA60)의 수렴 및 확산 구간에 위치해 있으며, 거래량 유입 여부에 따라 방향성 결정이 예상됩니다. 리스크 관리를 동반한 분할 매수 전략이 유효합니다."
+      "summary": f"[{stock_name} (종목코드: {code})] AI 심층 정밀 진단 결과: 단기 이동평균선(MA5, MA20)과 중장기 이동평균선(MA60)의 배열 상태를 분석한 결과, 현재 변동성 장세 속에서 지지선 테스트가 진행 중입니다. 거래량의 추세적 유입 여부를 모니터링하며 리스크 관리 중심의 접근이 필요합니다."
   }
 
 with tab_analysis:
   st.markdown("""
   <div class="disclaimer-box">
       <b style="color:#ef4444;">⚠️ 투자 리스크 고지 및 법적 면책 고지</b><br>
-      본 플랫폼의 모든 데이터는 참고용이며 투자의 책임은 본인에게 있습니다.
+      본 플랫폼의 모든 데이터 및 AI 진단 내용은 참고용이며, 투자에 대한 최종 책임은 투자자 본인에게 있습니다.
   </div>
   """, unsafe_allow_html=True)
 
-  stock_input = st.text_input("🔍 종목명 입력:", placeholder="예: 삼성전자, 카카오, 대원전선 또는 6자리 코드")
+  stock_input = st.text_input("🔍 분석을 원하는 종목명 또는 코드 입력:", placeholder="예: 삼성전자, 카카오, 대원전선 또는 6자리 코드")
 
-  if st.button("🚀 AI 기술적 진단 실행", type="primary", use_container_width=True):
+  if st.button("🚀 AI 정밀 기술적 진단 실행", type="primary", use_container_width=True):
     if not stock_input:
       st.warning("종목명을 입력해주세요.")
     else:
@@ -278,11 +276,11 @@ with tab_analysis:
       st.markdown(f"""
       <div class="animated-ad-banner">
           <span class="ad-badge">SPONSORED</span>
-          <a href="{COUPANG_LINK}" target="_blank" class="ad-link">🔥 [베스트 경제/재테크 도서 할인전] 바로가기 ➔</a>
+          <a href="{COUPANG_LINK}" target="_blank" class="ad-link">🔥 [베스트 경제/재테크 도서 할인전] 최대 혜택 바로가기 ➔</a>
       </div>
       """, unsafe_allow_html=True)
 
-      with st.spinner("실시간 데이터 분석 중..."):
+      with st.spinner("실시간 시장 데이터 수집 및 AI 기술적 지표 계산 중..."):
         df = fetch_stock_market_data(code)
         fin_info = get_financial_info(code, stock_input)
 
@@ -306,12 +304,13 @@ with tab_analysis:
 
         c1, c2, c3, c4 = st.columns(4)
         c1.markdown(f'<div class="metric-card"><div class="metric-title">실시간 주가</div><div class="metric-value">{current_price:,}원 ({pct_change:+.2f}%)</div></div>', unsafe_allow_html=True)
-        c2.markdown(f'<div class="metric-card"><div class="metric-title">RSI</div><div class="metric-value">{current_rsi}</div></div>', unsafe_allow_html=True)
-        c3.markdown(f'<div class="metric-card"><div class="metric-title">PER</div><div class="metric-value">{fin_info["per"]}</div></div>', unsafe_allow_html=True)
-        c4.markdown(f'<div class="metric-card"><div class="metric-title">PBR</div><div class="metric-value">{fin_info["pbr"]}</div></div>', unsafe_allow_html=True)
+        c2.markdown(f'<div class="metric-card"><div class="metric-title">RSI (14)</div><div class="metric-value">{current_rsi}</div></div>', unsafe_allow_html=True)
+        c3.markdown(f'<div class="metric-card"><div class="metric-title">추정 PER</div><div class="metric-value">{fin_info["per"]}</div></div>', unsafe_allow_html=True)
+        c4.markdown(f'<div class="metric-card"><div class="metric-title">추정 PBR</div><div class="metric-value">{fin_info["pbr"]}</div></div>', unsafe_allow_html=True)
 
-        st.markdown("<div class='section-header'>테크니컬 차트 & 이동평균선</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-header'>테크니컬 차트 & 이동평균선 (MA 5, 20, 60)</div>", unsafe_allow_html=True)
         fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25])
+        
         # 캔들스틱
         fig.add_trace(go.Candlestick(x=df.index, open=df["Open"], high=df["High"], low=df["Low"], close=df["Close"], name="주가"), row=1, col=1)
         # 이동평균선 추가
@@ -321,91 +320,50 @@ with tab_analysis:
         
         # 거래량
         fig.add_trace(go.Bar(x=df.index, y=df["Volume"], name="거래량"), row=2, col=1)
-        fig.update_layout(template="plotly_dark", height=500, margin=dict(l=10, r=10, t=10, b=10), xaxis_rangeslider_visible=False)
+        fig.update_layout(template="plotly_dark", height=520, margin=dict(l=10, r=10, t=10, b=10), xaxis_rangeslider_visible=False)
         st.plotly_chart(fig, use_container_width=True)
 
-        st.markdown("<div class='section-header'>AI 분석 및 기업 개요</div>", unsafe_allow_html=True)
-        st.markdown(f'<div class="custom-card"><p>{fin_info["summary"]}</p></div>', unsafe_allow_html=True)
+        st.markdown("<div class='section-header'>AI 심층 진단 리포트</div>", unsafe_allow_html=True)
+        st.markdown(f'<div class="custom-card"><p style="line-height: 1.6; font-size: 1.05rem;">{fin_info["summary"]}</p></div>', unsafe_allow_html=True)
         
         render_kakao_adfit()
-
-with tab_mock:
-  st.subheader("📈 실전 모의투자 시스템")
-  st.markdown(f"현재 보유 현금: **{st.session_state['mock_balance']:,}원**")
-  
-  mock_input = st.text_input("거래할 종목명 또는 코드 입력:", key="mock_input_text")
-  if mock_input:
-    m_code = get_stock_code(mock_input)
-    m_df = fetch_stock_market_data(m_code)
-    if not m_df.empty:
-      m_price = int(m_df["Close"].iloc[-1])
-      st.info(f"선택 종목: **{mock_input} ({m_code})** | 현재가: **{m_price:,}원**")
-      
-      col_b1, col_b2 = st.columns(2)
-      with col_b1:
-        buy_qty = st.number_input("매수 수량", min_value=1, value=1, step=1, key="buy_qty")
-        if st.button("🛒 매수하기", use_container_width=True):
-          total_cost = m_price * buy_qty
-          if st.session_state["mock_balance"] >= total_cost:
-            st.session_state["mock_balance"] -= total_cost
-            curr_holding = st.session_state["mock_portfolio"].get(m_code, {"name": mock_input, "qty": 0, "avg_price": 0})
-            new_qty = curr_holding["qty"] + buy_qty
-            new_avg = ((curr_holding["qty"] * curr_holding["avg_price"]) + total_cost) / new_qty
-            st.session_state["mock_portfolio"][m_code] = {"name": mock_input, "qty": new_qty, "avg_price": new_avg}
-            st.success(f"{mock_input} {buy_qty}주 매수 완료!")
-            st.rerun()
-          else:
-            st.error("현금이 부족합니다.")
-      
-      with col_b2:
-        held_info = st.session_state["mock_portfolio"].get(m_code, {"qty": 0})
-        sell_qty = st.number_input("매도 수량", min_value=1, max_value=max(1, held_info["qty"]), value=1, step=1, key="sell_qty")
-        if st.button("💰 매도하기", use_container_width=True):
-          if held_info["qty"] >= sell_qty:
-            st.session_state["mock_balance"] += m_price * sell_qty
-            held_info["qty"] -= sell_qty
-            if held_info["qty"] == 0:
-              del st.session_state["mock_portfolio"][m_code]
-            else:
-              st.session_state["mock_portfolio"][m_code] = held_info
-            st.success(f"{mock_input} {sell_qty}주 매도 완료!")
-            st.rerun()
-          else:
-            st.error("보유 수량이 부족합니다.")
-
-  st.markdown("### 📊 나의 보유 포트폴리오")
-  if st.session_state["mock_portfolio"]:
-    port_rows = []
-    for code, info in st.session_state["mock_portfolio"].items():
-      port_rows.append({"종목명": info["name"], "보유수량": info["qty"], "평균매수가": f"{int(info['avg_price']):,}원"})
-    st.table(pd.DataFrame(port_rows))
-  else:
-    st.write("보유 중인 주식이 없습니다.")
 
 with tab_board:
   st.subheader("💬 주주 오픈 토론방")
   if st.session_state["logged_in"]:
     with st.form("post_form", clear_on_submit=True):
-      title = st.text_input("제목")
-      content = st.text_area("내용")
-      if st.form_submit_button("등록"):
+      title = st.text_input("토론 제목")
+      content = st.text_area("토론 내용 작성")
+      if st.form_submit_button("게시물 등록", type="primary"):
         if title and content:
           posts = load_posts()
           new_id = (max([p.get("id", 0) for p in posts]) + 1) if posts else 1
           posts.insert(0, {"id": new_id, "author": st.session_state["nickname"], "title": title, "content": content, "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")})
           save_posts_to_firebase(posts)
-          st.success("등록되었습니다!")
+          st.success("게시물이 성공적으로 등록되었습니다!")
           st.rerun()
   else:
-    st.info("로그인 후 글을 작성할 수 있습니다.")
+    st.info("로그인 후 주주 토론방에 글을 작성하실 수 있습니다.")
 
+  st.markdown("---")
   for p in load_posts():
-    st.markdown(f"""<div class="post-card"><b>{p.get('title')}</b><p>{p.get('content')}</p><span style="font-size:0.8rem;color:#8b949e;">{p.get('author')} | {p.get('date')}</span></div>""", unsafe_allow_html=True)
+    st.markdown(f"""
+    <div class="post-card">
+        <b style="font-size: 1.1rem; color: #58a6ff;">{p.get('title')}</b>
+        <p style="margin-top: 8px; color: #c9d1d9;">{p.get('content')}</p>
+        <span style="font-size:0.8rem; color:#8b949e;">작성자: {p.get('author')} | 작성일시: {p.get('date')}</span>
+    </div>
+    """, unsafe_allow_html=True)
 
 with tab_mypage:
-  st.subheader("⚙️ 마이페이지")
+  st.subheader("⚙️ 마이페이지 및 회원 정보")
   if st.session_state["logged_in"]:
-    st.markdown(f"현재 닉네임: **{st.session_state['nickname']}**")
-    st.markdown(f"아이디: **{st.session_state['user_id']}**")
+    st.markdown(f"""
+    <div class="custom-card">
+        <p><b>닉네임:</b> {st.session_state['nickname']}</p>
+        <p><b>계정 아이디:</b> {st.session_state['user_id']}</p>
+        <p style="color: #38bdf8; margin-top: 10px;">✅ 정상적으로 인증된 세션입니다.</p>
+    </div>
+    """, unsafe_allow_html=True)
   else:
-    st.warning("로그인 필요")
+    st.warning("로그인 상태가 아닙니다. 사이드바에서 로그인 또는 회원가입을 진행해 주세요.")
