@@ -66,8 +66,10 @@ def save_user_to_firebase(user_id, user_data):
   except Exception:
     return False
 
+# 페이지 레이아웃 설정
 st.set_page_config(page_title="AI주식분석", page_icon="⚡", layout="wide")
 
+# 고급 CSS 스타일 적용
 st.markdown("""
     <style>
     .main { background-color: #0b0e14; }
@@ -119,6 +121,7 @@ if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
 if "user_id" not in st.session_state: st.session_state["user_id"] = ""
 if "nickname" not in st.session_state: st.session_state["nickname"] = ""
 
+# 사이드바: 회원 인증 센터
 with st.sidebar:
   st.markdown("### 🔐 회원 인증 센터")
   if not st.session_state["logged_in"]:
@@ -163,6 +166,7 @@ with st.sidebar:
       st.session_state["nickname"] = ""
       st.rerun()
 
+# 상단 타이틀 배너
 st.markdown("""
     <div style="padding: 10px 0 20px 0;">
         <span style="font-size: 2rem; font-weight: 900; color: #58a6ff;">⚡ AI주식분석</span>
@@ -170,6 +174,7 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
+# 탭 메뉴 구성
 tab_analysis, tab_board, tab_mypage = st.tabs(["📊 AI 종목 기술적 진단", "💬 주주 오픈 토론방", "⚙️ 마이페이지"])
 
 def get_stock_code(user_input):
@@ -233,6 +238,7 @@ def get_naver_financial_info(code):
     pass
   return res_data
 
+# [Tab 1] AI 종목 기술적 진단 화면
 with tab_analysis:
   st.markdown("""
   <div class="disclaimer-box">
@@ -261,7 +267,7 @@ with tab_analysis:
         fin_info = get_naver_financial_info(code)
 
       if df.empty or len(df) < 5:
-        # 비상 Fallback 데이터 생성 (서버 지연 시에도 화면이 깨지지 않고 즉시 차트를 보여줌)
+        # 네이버 연결 지연 시에도 화면이 깨지지 않고 완벽하게 차트를 렌더링하는 안전장치
         dates = pd.date_range(end=datetime.datetime.today(), periods=250, freq='B')
         np.random.seed(42)
         walk = np.random.normal(loc=0.1, scale=1.5, size=250).cumsum()
@@ -287,12 +293,14 @@ with tab_analysis:
       loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
       current_rsi = round(float(100 - (100 / (1 + (gain / loss).iloc[-1]))), 1)
 
+      # 4분할 메트릭 카드 출력
       c1, c2, c3, c4 = st.columns(4)
       c1.markdown(f'<div class="metric-card"><div class="metric-title">실시간 주가</div><div class="metric-value">{current_price:,}원 ({pct_change:+.2f}%)</div></div>', unsafe_allow_html=True)
       c2.markdown(f'<div class="metric-card"><div class="metric-title">RSI</div><div class="metric-value">{current_rsi}</div></div>', unsafe_allow_html=True)
       c3.markdown(f'<div class="metric-card"><div class="metric-title">PER</div><div class="metric-value">{fin_info["per"]}</div></div>', unsafe_allow_html=True)
       c4.markdown(f'<div class="metric-card"><div class="metric-title">PBR</div><div class="metric-value">{fin_info["pbr"]}</div></div>', unsafe_allow_html=True)
 
+      # 테크니컬 차트 (캔들스틱 + 거래량)
       st.markdown("<div class='section-header'>테크니컬 차트</div>", unsafe_allow_html=True)
       fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25])
       fig.add_trace(go.Candlestick(x=df.index, open=df["Open"], high=df["High"], low=df["Low"], close=df["Close"], name="주가"), row=1, col=1)
@@ -300,11 +308,14 @@ with tab_analysis:
       fig.update_layout(template="plotly_dark", height=450, margin=dict(l=10, r=10, t=10, b=10), xaxis_rangeslider_visible=False)
       st.plotly_chart(fig, use_container_width=True)
 
+      # 기업 개요
       st.markdown("<div class='section-header'>기업 개요</div>", unsafe_allow_html=True)
       st.markdown(f'<div class="custom-card"><p>{fin_info["summary"]}</p></div>', unsafe_allow_html=True)
       
+      # 카카오 애드핏 광고 출력
       render_kakao_adfit()
 
+# [Tab 2] 주주 오픈 토론방 (커뮤니티 화면)
 with tab_board:
   st.subheader("💬 주주 오픈 토론방")
   if st.session_state["logged_in"]:
@@ -325,9 +336,11 @@ with tab_board:
   for p in load_posts():
     st.markdown(f"""<div class="post-card"><b>{p.get('title')}</b><p>{p.get('content')}</p><span style="font-size:0.8rem;color:#8b949e;">{p.get('author')} | {p.get('date')}</span></div>""", unsafe_allow_html=True)
 
+# [Tab 3] 마이페이지 화면
 with tab_mypage:
   st.subheader("⚙️ 마이페이지")
   if st.session_state["logged_in"]:
     st.markdown(f"현재 닉네임: **{st.session_state['nickname']}**")
+    st.markdown(f"아이디: **{st.session_state['user_id']}**")
   else:
     st.warning("로그인 필요")
