@@ -1,5 +1,5 @@
-import google.generativeai as genai
 import streamlit as st
+from groq import Groq
 
 st.set_page_config(
     page_title="국내주식 5단계 정밀 분석기", page_icon="📈", layout="wide"
@@ -10,10 +10,10 @@ st.caption(
     "이평선(5/20/60/112/224일) 기반 차트 지도, 3자 종합 토론, 실전 모의투자 세팅 제공"
 )
 
-# API 키 설정 (보안)
-api_key = st.sidebar.text_input("Gemini API Key를 입력하세요:", type="password")
+# API 키 설정
+api_key = st.sidebar.text_input("Groq API Key를 입력하세요:", type="password")
 st.sidebar.markdown(
-    "[API Key 무료 발급 링크](https://aistudio.google.com/app/apikey)"
+    "[Groq API Key 무료 발급 링크](https://console.groq.com/keys)"
 )
 
 stock_name = st.text_input(
@@ -23,16 +23,13 @@ stock_name = st.text_input(
 
 if st.button("🚀 실시간 정밀 분석 시작", type="primary"):
     if not api_key:
-        st.error("좌측 사이드바에 Gemini API Key를 입력해주세요!")
+        st.error("좌측 사이드바에 Groq API Key를 입력해주세요!")
     elif not stock_name:
         st.warning("분석할 종목명을 입력해주세요.")
     else:
         with st.spinner(f"'{stock_name}' 종목 정밀 분석 보고서 생성 중..."):
             try:
-                genai.configure(api_key=api_key)
-                
-                # 구글 표준 정식 지원 모델명 사용
-                model = genai.GenerativeModel("gemini-1.0-pro")
+                client = Groq(api_key=api_key)
 
                 prompt = f"""
 너는 KOSPI/KOSDAQ 분석 전문 트레이더이자 리서치 애널리스트야.
@@ -51,8 +48,11 @@ if st.button("🚀 실시간 정밀 분석 시작", type="primary"):
 4. 🎯 결론 및 종합 투자 의견 (매수/매도/관망 점수 및 목표가)
 5. 🛡️ 실전 모의투자 세팅 가이드 (손절가, 분할 매수가, 비중 제시)
 """
-                response = model.generate_content(prompt)
-                st.markdown(response.text)
+                response = client.chat.completions.create(
+                    messages=[{"role": "user", "content": prompt}],
+                    model="llama-3.3-70b-versatile",
+                )
+                st.markdown(response.choices[0].message.content)
 
             except Exception as e:
                 st.error(f"분석 중 오류가 발생했습니다: {e}")
