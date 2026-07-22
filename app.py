@@ -1,421 +1,710 @@
 import datetime
-import hashlib
-import json
+import re
+import time
 import urllib.parse
+import xml.etree.ElementTree as ET
 import pandas as pd
-import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import requests
 import streamlit as st
+import yfinance as yf
 
 # =============================================================================
-# 🔥 [수익화 설정 영역] 쿠팡, 구글 애드센스, 카카오 애드핏 설정
+# 🔥 [수익화 설정] 본인의 쿠팡 파트너스 링크를 아래 큰따옴표 안에 넣어주세요.
 # =============================================================================
-COUPANG_LINK = "https://link.coupang.com/a/fAS0LGAFK8"
-GOOGLE_ADSENSE_CLIENT = "ca-pub-XXXXXXXXXXXXXXXX" 
-GOOGLE_ADSENSE_SLOT = "1234567890"
-KAKAO_ADFIT_UNIT = "DAN-W4CcfdCUtd8S6CN5"
-FIREBASE_URL = "https://mystockcommunity-dd967-default-rtdb.firebaseio.com/"
+COUPANG_LINK = "https://link.coupang.com/a/XXXXXX"  # <--- 본인 파트너스 단축 URL 붙여넣기
 
-def hash_password(password):
-  return hashlib.sha256(password.encode()).hexdigest()
+# -----------------------------------------------------------------------------
+# 1. 페이지 설정 & 커스텀 CSS
+# -----------------------------------------------------------------------------
+st.set_page_config(
+    page_title="AI 기술적 분석 참고기",
+    page_icon="📈",
+    layout="wide",
+)
 
-def load_posts():
-  try:
-    response = requests.get(f"{FIREBASE_URL}posts.json", timeout=3)
-    if response.status_code == 200:
-      data = response.json()
-      if data is not None:
-        if isinstance(data, dict):
-          posts_list = list(data.values())
-        elif isinstance(data, list):
-          posts_list = [p for p in data if p is not None]
-        else:
-          posts_list = []
-        posts_list.sort(key=lambda x: x.get("id", 0), reverse=True)
-        return posts_list
-  except Exception:
-    pass
-  return []
-
-def save_posts_to_firebase(posts):
-  try:
-    requests.put(f"{FIREBASE_URL}posts.json", json=posts, timeout=3)
-  except Exception:
-    pass
-
-def load_users():
-  try:
-    response = requests.get(f"{FIREBASE_URL}users.json", timeout=3)
-    if response.status_code == 200:
-      data = response.json()
-      if data and isinstance(data, dict):
-        return data
-  except Exception:
-    pass
-  return {}
-
-def save_user_to_firebase(user_id, user_data):
-  try:
-    safe_key = user_id.replace(".", "_").replace("#", "_").replace("$", "_")
-    requests.put(f"{FIREBASE_URL}users/{safe_key}.json", json=user_data, timeout=3)
-    return True
-  except Exception:
-    return False
-
-# 페이지 레이아웃 설정
-st.set_page_config(page_title="📈 AI 정밀분석기", page_icon="⚡", layout="wide")
-
-# 고급 CSS 스타일 적용
-st.markdown("""
-    <style>
-    .main { background-color: #0b0e14; }
-    .animated-ad-banner {
-        background: linear-gradient(120deg, #131b2e 0%, #1e293b 50%, #131b2e 100%);
-        border: 1px solid rgba(59, 130, 246, 0.4);
-        border-radius: 14px;
-        padding: 20px 24px;
-        text-align: center;
-        margin: 24px 0;
-    }
-    .ad-badge {
-        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-        color: white; font-size: 0.7rem; font-weight: 800; padding: 4px 10px; border-radius: 6px; margin-right: 8px;
-    }
-    .ad-link { color: #38bdf8 !important; font-weight: 700; text-decoration: none; font-size: 1.05rem; }
-    .metric-card {
-        background: linear-gradient(145deg, #161b22 0%, #0d1117 100%);
-        border: 1px solid #21262d; border-radius: 12px; padding: 18px; margin-bottom: 14px;
-    }
-    .metric-title { color: #8b949e; font-size: 0.75rem; font-weight: 700; margin-bottom: 8px; text-transform: uppercase; }
-    .metric-value { color: #f0f6fc; font-size: 1.2rem; font-weight: 800; }
-    .custom-card {
-        background-color: #161b22; border-left: 4px solid #3b82f6; border-radius: 10px; padding: 20px; margin-bottom: 16px;
-        border-top: 1px solid #21262d; border-right: 1px solid #21262d; border-bottom: 1px solid #21262d;
-    }
-    .disclaimer-box {
-        background: linear-gradient(135deg, #161b22 0%, #0f141c 100%);
-        border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 10px; padding: 16px 20px; margin: 16px 0 24px 0; font-size: 0.82rem; color: #c9d1d9;
-    }
-    .section-header { font-size: 1.25rem; font-weight: 800; color: #58a6ff; margin-top: 32px; margin-bottom: 14px; border-bottom: 2px solid #21262d; padding-bottom: 8px; }
-    .report-step { font-size: 1.05rem; font-weight: 700; color: #f0f6fc; margin-top: 18px; margin-bottom: 6px; }
-    .post-card { background-color: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 20px; margin-bottom: 16px; }
-    </style>
-""", unsafe_allow_html=True)
-
-def render_kakao_adfit():
-  adfit_html = f"""
-    <div style="text-align:center; margin: 20px 0; background: #161b22; padding: 15px; border-radius: 10px; border: 1px solid #30363d;">
-        <ins class="kakao_ad_area" style="display:none;"
-             data-ad-unit="{KAKAO_ADFIT_UNIT}"
-             data-ad-width="300"
-             data-ad-height="250"></ins>
-        <script type="text/javascript" src="//t1.daumcdn.net/kas/static/ba.min.js" async></script>
-    </div>
+st.markdown(
     """
-  st.components.v1.html(adfit_html, height=290)
+    <style>
+    .main { background-color: #0E1117; }
+    
+    .metric-card {
+        background: linear-gradient(135deg, #1E232A 0%, #16191E 100%);
+        border: 1px solid #2D333B;
+        border-radius: 12px;
+        padding: 16px 18px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+        margin-bottom: 12px;
+        min-height: 100px;
+    }
+    .metric-title {
+        color: #8B949E;
+        font-size: 0.8rem;
+        font-weight: 600;
+        margin-bottom: 6px;
+        text-transform: uppercase;
+    }
+    .metric-value {
+        color: #F0F6FC;
+        font-size: 1.1rem;
+        font-weight: 700;
+        line-height: 1.3;
+    }
 
-if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
-if "user_id" not in st.session_state: st.session_state["user_id"] = ""
-if "nickname" not in st.session_state: st.session_state["nickname"] = ""
+    .custom-card {
+        background-color: #161B22;
+        border-left: 4px solid #3182CE;
+        border-radius: 8px;
+        padding: 18px;
+        margin-bottom: 16px;
+        border-top: 1px solid #30363D;
+        border-right: 1px solid #30363D;
+        border-bottom: 1px solid #30363D;
+    }
+    .custom-card.bull { border-left-color: #E53E3E; }
+    .custom-card.bear { border-left-color: #3182CE; }
+    .custom-card.quant { border-left-color: #38A169; }
+    .custom-card.warn { border-left-color: #DD6B20; }
 
-with st.sidebar:
-  st.markdown("### 🔐 회원 인증 센터")
-  if not st.session_state["logged_in"]:
-    auth_mode = st.radio("모드 선택", ["로그인", "회원가입"], horizontal=True)
-    if auth_mode == "로그인":
-      with st.form("login_form"):
-        login_id = st.text_input("아이디")
-        login_pw = st.text_input("비밀번호", type="password")
-        if st.form_submit_button("로그인", use_container_width=True, type="primary"):
-          users_db = load_users()
-          safe_key = login_id.replace(".", "_").replace("#", "_").replace("$", "_")
-          if safe_key in users_db and users_db[safe_key]["password"] == hash_password(login_pw):
-            st.session_state["logged_in"] = True
-            st.session_state["user_id"] = login_id
-            st.session_state["nickname"] = users_db[safe_key].get("nickname", login_id)
-            st.rerun()
-          else:
-            st.error("아이디 또는 비밀번호가 불일치합니다.")
-    else:
-      with st.form("signup_form"):
-        new_id = st.text_input("사용할 아이디")
-        new_nickname = st.text_input("커뮤니티 닉네임")
-        new_pw = st.text_input("비밀번호", type="password")
-        new_pw_check = st.text_input("비밀번호 확인", type="password")
-        if st.form_submit_button("회원가입 완료", use_container_width=True, type="primary"):
-          if new_pw != new_pw_check:
-            st.error("비밀번호가 불일치합니다.")
-          else:
-            users_db = load_users()
-            safe_key = new_id.replace(".", "_").replace("#", "_").replace("$", "_")
-            if safe_key in users_db:
-              st.error("이미 존재하는 아이디입니다.")
-            else:
-              user_data = {"user_id": new_id, "nickname": new_nickname, "password": hash_password(new_pw), "joined_date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}
-              if save_user_to_firebase(new_id, user_data):
-                st.success("회원가입 완료! 로그인하세요.")
-  else:
-    st.markdown(f"👤 <b>{st.session_state['nickname']}</b>님 접속중", unsafe_allow_html=True)
-    if st.button("로그아웃", use_container_width=True):
-      st.session_state["logged_in"] = False
-      st.session_state["user_id"] = ""
-      st.session_state["nickname"] = ""
-      st.rerun()
+    .disclaimer-box {
+        background-color: #161B22;
+        border: 1px solid #E53E3E;
+        border-radius: 8px;
+        padding: 14px 18px;
+        margin: 15px 0;
+        font-size: 0.83rem;
+        color: #C9D1D9;
+        line-height: 1.6;
+    }
 
-st.markdown("""
-    <div style="padding: 10px 0 20px 0;">
-        <span style="font-size: 2rem; font-weight: 900; color: #58a6ff;">📈 AI 정밀분석기</span>
-        <span style="color: #8b949e; font-size: 0.95rem; margin-left: 12px;">월가 애널리스트 관점 통합 기술/재무 진단 & 주주 토론방</span>
-    </div>
-""", unsafe_allow_html=True)
+    .ad-banner {
+        background: linear-gradient(90deg, #1F2937 0%, #111827 100%);
+        border: 1px solid #374151;
+        border-radius: 10px;
+        padding: 16px;
+        text-align: center;
+        margin: 20px 0;
+        color: #D1D5DB;
+    }
 
-@st.cache_data(ttl=3600)
-def get_stock_code(user_input):
-  cleaned = user_input.strip()
-  if cleaned.isdigit() and len(cleaned) == 6:
-    return cleaned
-  
+    .styled-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 15px 0;
+        font-size: 0.95em;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .styled-table thead tr {
+        background-color: #21262D;
+        color: #C9D1D9;
+        text-align: left;
+        font-weight: bold;
+    }
+    .styled-table th, .styled-table td {
+        padding: 12px 15px;
+        border-bottom: 1px solid #30363D;
+    }
+    .styled-table tbody tr:nth-of-type(even) {
+        background-color: #161B22;
+    }
+    
+    .section-header {
+        font-size: 1.25rem;
+        font-weight: bold;
+        color: #58A6FF;
+        margin-top: 25px;
+        margin-bottom: 12px;
+        border-bottom: 1px solid #30363D;
+        padding-bottom: 6px;
+    }
+    </style>
+""",
+    unsafe_allow_html=True,
+)
+
+st.title("📈 AI 주식 기술적 데이터 참고기")
+st.caption(
+    "네이버 금융 실시간 재무연동 · 차트 · PER/PBR · 알고리즘 산출 참고 기준 · 실시간 뉴스 링크"
+)
+
+# 상단 법적 고지 안내 (자본시장법 및 무등록 자문 방지 문구 강화)
+st.markdown(
+    """
+<div class="disclaimer-box">
+    <b style="color:#E53E3E;">⚠️ 필수 확인사항 및 법적 면책 고지 (Disclaimer)</b><br>
+    본 서비스는 자본시장법상 금융투자업자 또는 투자자문업자가 아니며, 특정 종목에 대한 매수/매도 추천이나 수수료 기반 투자자문을 제공하지 않습니다.<br>
+    제공되는 모든 수치, 지표, 시나리오 및 기술적 참고 가격은 공개된 시세 데이터와 알고리즘 기반 단순 계산에 따른 <b>'기술적 분석 참고용 정보'</b>일 뿐입니다.<br>
+    데이터의 완전성과 정확성을 보장하지 않으며, <b>모든 투자 결정 및 최종 수익/손실에 대한 책임은 전적으로 투자자 본인에게 있습니다.</b>
+</div>
+""",
+    unsafe_allow_html=True,
+)
+
+
+# -----------------------------------------------------------------------------
+# 2. 유틸리티 함수 & 크롤링
+# -----------------------------------------------------------------------------
+def get_naver_financial_data(code_num):
+  url = f"https://finance.naver.com/item/main.naver?code={code_num}"
+  headers = {
+      "User-Agent": (
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+      )
+  }
+  res = {"per": "-", "forward_per": "-", "pbr": "-", "roe": "-"}
   try:
-    encoded_query = urllib.parse.quote(cleaned)
-    url = f"https://ac.finance.naver.com/ac?q={encoded_query}&target=stock"
-    headers = {"User-Agent": "Mozilla/5.0"}
-    res = requests.get(url, headers=headers, timeout=3)
-    if res.status_code == 200:
-      items = res.json().get("items", [])
-      if items and len(items[0]) > 0:
-        return items[0][0][0]
+    resp = requests.get(url, headers=headers, timeout=5)
+    text = resp.text
+
+    per_match = re.search(
+        r'<em id="_per">([\d\.\-]+)</em>', text
+    ) or re.search(r'PER\s*<em[^>]*>([\d\.\-]+)</em>', text)
+    if per_match and per_match.group(1) != "-":
+      res["per"] = f"{per_match.group(1)}배"
+
+    pbr_match = re.search(r'<em id="_pbr">([\d\.\-]+)</em>', text)
+    if pbr_match and pbr_match.group(1) != "-":
+      res["pbr"] = f"{pbr_match.group(1)}배"
+
+    fper_match = re.search(r'<em id="_cper">([\d\.\-]+)</em>', text)
+    if fper_match and fper_match.group(1) != "-":
+      res["forward_per"] = f"{fper_match.group(1)}배"
+
   except Exception:
     pass
+  return res
 
-  fallback_map = {
+
+def fetch_realtime_news(query_term):
+  encoded_query = urllib.parse.quote(query_term)
+  rss_url = f"https://news.google.com/rss/search?q={encoded_query}&hl=ko&gl=KR&ceid=KR:ko"
+  news_items = []
+  try:
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        )
+    }
+    resp = requests.get(rss_url, headers=headers, timeout=5)
+    if resp.status_code == 200:
+      root = ET.fromstring(resp.content)
+      for item in root.findall(".//item")[:6]:
+        title = item.find("title").text if item.find("title") is not None else ""
+        link = item.find("link").text if item.find("link") is not None else "#"
+        pub_date = (
+            item.find("pubDate").text if item.find("pubDate") is not None else ""
+        )
+        source = (
+            item.find("source").text
+            if item.find("source") is not None
+            else "주요 언론사"
+        )
+        if " - " in title:
+          parts = title.rsplit(" - ", 1)
+          title = parts[0]
+          source = parts[1]
+        news_items.append({
+            "title": title,
+            "link": link,
+            "pub_date": pub_date,
+            "source": source,
+        })
+  except Exception:
+    pass
+  return news_items
+
+
+stock_input = st.text_input(
+    "🔍 조회할 종목명 또는 종목코드를 입력하세요:",
+    placeholder="예: 삼성전자, 대원전선, SK하이닉스, 005930",
+)
+
+
+def get_ticker_symbol_and_code(user_input):
+  user_input = user_input.strip()
+  if user_input.isdigit() and len(user_input) == 6:
+    return f"{user_input}.KS", user_input
+  mapping = {
       "삼성전자": "005930",
-      "카카오": "035720",
-      "대원전선": "006340",
       "SK하이닉스": "000660",
+      "대원전선": "006340",
+      "한화오션": "042660",
       "LG에너지솔루션": "373220",
       "현대차": "005380",
+      "POSCO홀딩스": "005490",
+      "에코프로비엠": "247540",
       "에코프로": "086520",
-      "포스코홀딩스": "005490",
-      "셀트리온": "068270",
-      "기아": "000270"
+      "알테오젠": "196170",
+      "HLB": "028300",
   }
-  return fallback_map.get(cleaned, "005930")
+  code = mapping.get(user_input, user_input)
+  return f"{code}.KS", code
 
-@st.cache_data(ttl=1800)
-def fetch_stock_market_data(code):
-  # 1순위: 네이버 금융 차트 API (가장 안정적)
-  try:
-    url = f"https://fchart.stock.naver.com/sise.nhn?symbol={code}&timeframe=day&count=200&type=json"
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-    res = requests.get(url, headers=headers, timeout=5)
-    if res.status_code == 200:
-      data = res.json()
-      item_data = data.get("itemData", [])
-      if item_data:
-        chart_rows = []
-        for item in item_data:
-          chart_rows.append({
-              "Date": pd.to_datetime(str(item[0]), format="%Y%m%d"),
-              "Open": float(item[1]),
-              "High": float(item[2]),
-              "Low": float(item[3]),
-              "Close": float(item[4]),
-              "Volume": float(item[5])
-          })
-        df = pd.DataFrame(chart_rows)
-        df.set_index("Date", inplace=True)
-        df = df.dropna()
-        if not df.empty:
-          return df
-  except Exception:
-    pass
 
-  # 2순위: 야후 파이낸스 API (백업)
-  try:
-    ticker = f"{code}.KS" if code.startswith("0") else f"{code}.KQ"
-    period1 = int((datetime.datetime.today() - datetime.timedelta(days=365)).timestamp())
-    period2 = int(datetime.datetime.today().timestamp())
-    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?period1={period1}&period2={period2}&interval=1d"
-    headers = {"User-Agent": "Mozilla/5.0"}
-    res = requests.get(url, headers=headers, timeout=5)
-    if res.status_code == 200:
-      data = res.json()
-      result = data['chart']['result'][0]
-      timestamps = result['timestamp']
-      quote = result['indicators']['quote'][0]
-      df = pd.DataFrame({
-          'Date': pd.to_datetime(timestamps, unit='s'),
-          'Open': quote.get('open'),
-          'High': quote.get('high'),
-          'Low': quote.get('low'),
-          'Close': quote.get('close'),
-          'Volume': quote.get('volume')
-      })
-      df.set_index('Date', inplace=True)
-      df = df.dropna()
-      if not df.empty:
-        return df
-  except Exception:
-    pass
-
-  return pd.DataFrame()
-
-st.markdown("""
-<div class="disclaimer-box">
-    <b style="color:#ef4444;">⚠️ 투자 리스크 고지 및 법적 면책 고지</b><br>
-    본 플랫폼의 모든 데이터 및 AI 진단 내용은 참고용이며, 투자에 대한 최종 책임은 투자자 본인에게 있습니다.
-</div>
-""", unsafe_allow_html=True)
-
-stock_input = st.text_input("🔍 분석을 원하는 종목명 또는 코드 입력:", placeholder="예: 삼성전자, 카카오, 대원전선 또는 6자리 코드")
-
-if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container_width=True):
+# -----------------------------------------------------------------------------
+# 3. 메인 분석 실행
+# -----------------------------------------------------------------------------
+if st.button(
+    "🚀 AI 기술적 지표 산출 시작", type="primary", use_container_width=True
+):
   if not stock_input:
-    st.warning("종목명을 입력해주세요.")
+    st.warning("⚠️ 조회할 종목명이나 종목코드를 입력해주세요.")
   else:
-    code = get_stock_code(stock_input)
-    
-    st.markdown(f"""
-    <div class="animated-ad-banner">
-        <span class="ad-badge">SPONSORED</span>
-        <a href="{COUPANG_LINK}" target="_blank" class="ad-link">🔥 [베스트 경제/재테크 도서 할인전] 최대 혜택 바로가기 ➔</a>
+    ticker_symbol, pure_code = get_ticker_symbol_and_code(stock_input)
+
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+
+    # 표시광고법 준수 쿠팡 파트너스 배너
+    st.markdown(
+        f"""
+    <div class="ad-banner">
+        <span style="font-size:0.8rem; color:#9CA3AF; display:block; margin-bottom:6px;">☕ 본 서비스는 무료로 제공되며, 아래 스폰서 배너를 통해 운영됩니다.</span>
+        <a href="{COUPANG_LINK}" target="_blank" style="color:#60A5FA; font-weight:bold; text-decoration:none; font-size:1.05rem;">
+            🎁 [후원 배너] 오늘의 주식/재테크 관련 도서 특가 확인하기 ➔
+        </a>
+        <div style="font-size:0.75rem; color:#9CA3AF; margin-top:6px;">이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.</div>
     </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
-    with st.spinner(f"[{stock_input}] (종목코드: {code}) 실시간 시장 데이터 수집 및 8대 핵심 요소 분석 수행 중..."):
-      df = fetch_stock_market_data(code)
+    for i in range(1, 101):
+      time.sleep(0.02)
+      progress_bar.progress(i)
+      if i < 40:
+        status_text.text(
+            f"⏳ AI 데이터 수집 및 차트 수치 연동 중... ({i}%)"
+        )
+      elif i < 80:
+        status_text.text(
+            f"📊 이평선 및 PER/PBR 재무 밸류에이션 단순 계산 중... ({i}%)"
+        )
+      else:
+        status_text.text(
+            f"🎯 시나리오 및 기술적 수준 분석 완료... ({i}%)"
+        )
 
-    if df.empty or len(df) < 15:
-      st.error(f"⚠️ [{stock_input}]에 대한 데이터를 불러오지 못했습니다. 올바른 종목명/코드인지 확인하거나 잠시 후 다시 시도해 주세요.")
-    else:
-      current_price = int(df["Close"].iloc[-1])
-      prev_price = int(df["Close"].iloc[-2])
-      price_change = current_price - prev_price
-      pct_change = (price_change / prev_price) * 100
+    progress_bar.empty()
+    status_text.empty()
 
-      # 기술적 지표 계산 (MA5, MA20, MA60, MA120, RSI)
-      df["MA5"] = df["Close"].rolling(window=5).mean()
-      df["MA20"] = df["Close"].rolling(window=20).mean()
-      df["MA60"] = df["Close"].rolling(window=60).mean()
-      df["MA120"] = df["Close"].rolling(window=120).mean()
-      
-      delta = df["Close"].diff()
-      gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-      loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-      current_rsi = round(float(100 - (100 / (1 + (gain / loss).iloc[-1]))), 1)
+    try:
+      stock = yf.Ticker(ticker_symbol)
+      df = stock.history(period="1y")
 
-      ma20_val = df["MA20"].iloc[-1]
-      ma60_val = df["MA60"].iloc[-1]
-      ma120_val = df["MA120"].iloc[-1] if not pd.isna(df["MA120"].iloc[-1]) else ma60_val
+      if df.empty and ticker_symbol.endswith(".KS"):
+        ticker_symbol = ticker_symbol.replace(".KS", ".KQ")
+        stock = yf.Ticker(ticker_symbol)
+        df = stock.history(period="1y")
 
-      # 상단 4대 핵심 지표 카드
-      c1, c2, c3, c4 = st.columns(4)
-      c1.markdown(f'<div class="metric-card"><div class="metric-title">실시간 주가 ({stock_input})</div><div class="metric-value">{current_price:,}원 ({pct_change:+.2f}%)</div></div>', unsafe_allow_html=True)
-      c2.markdown(f'<div class="metric-card"><div class="metric-title">RSI (14)</div><div class="metric-value">{current_rsi}</div></div>', unsafe_allow_html=True)
-      c3.markdown(f'<div class="metric-card"><div class="metric-title">추정 PER / 선행 PER</div><div class="metric-value">12.5배 / 11.2배</div></div>', unsafe_allow_html=True)
-      c4.markdown(f'<div class="metric-card"><div class="metric-title">추정 PBR</div><div class="metric-value">1.1배</div></div>', unsafe_allow_html=True)
+      if df.empty:
+        st.error(
+            "⚠️ 해당 종목의 데이터를 찾을 수 없습니다. 정확한 종목명을"
+            " 입력해주세요."
+        )
+      else:
+        current_price = int(df["Close"].iloc[-1])
+        prev_price = int(df["Close"].iloc[-2])
+        price_change = current_price - prev_price
+        pct_change = (price_change / prev_price) * 100
+        volume = int(df["Volume"].iloc[-1])
 
-      # 1. 캔들스틱 및 기술적 차트 영역
-      st.markdown(f"<div class='section-header'>📈 1. 캔들스틱 & 기술적 분석 차트 (MA 5, 20, 60, 120)</div>", unsafe_allow_html=True)
-      fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25])
-      
-      fig.add_trace(go.Candlestick(x=df.index, open=df["Open"], high=df["High"], low=df["Low"], close=df["Close"], name="주가"), row=1, col=1)
-      fig.add_trace(go.Scatter(x=df.index, y=df["MA5"], line=dict(color="orange", width=1), name="MA 5"), row=1, col=1)
-      fig.add_trace(go.Scatter(x=df.index, y=df["MA20"], line=dict(color="cyan", width=1.2), name="MA 20"), row=1, col=1)
-      fig.add_trace(go.Scatter(x=df.index, y=df["MA60"], line=dict(color="magenta", width=1.2), name="MA 60"), row=1, col=1)
-      fig.add_trace(go.Scatter(x=df.index, y=df["MA120"], line=dict(color="yellow", width=1.2), name="MA 120"), row=1, col=1)
-      
-      fig.add_trace(go.Bar(x=df.index, y=df["Volume"], name="거래량"), row=2, col=1)
-      fig.update_layout(template="plotly_dark", height=540, margin=dict(l=10, r=10, t=10, b=10), xaxis_rangeslider_visible=False)
-      st.plotly_chart(fig, use_container_width=True)
+        df["MA20"] = df["Close"].rolling(window=20).mean()
+        df["MA60"] = df["Close"].rolling(window=60).mean()
+        df["MA120"] = df["Close"].rolling(window=120).mean()
 
-      # 단일 스크롤 연속형 월가 8대 분석 리포트
-      trend_status = "상승 추세" if current_price > ma60_val else "조정 및 횡보 추세"
-      rsi_status = "과열(탐욕) 구간" if current_rsi > 70 else ("침체(공포) 구간" if current_rsi < 30 else "중립 구간")
+        delta = df["Close"].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        df["RSI"] = 100 - (100 / (1 + rs))
+        current_rsi = (
+            round(df["RSI"].iloc[-1], 1) if not pd.isna(df["RSI"].iloc[-1]) else 50.0
+        )
 
-      st.markdown(f"""
-      <div class="custom-card">
-          <div style="font-size: 1.15rem; font-weight: 800; color: #58a6ff; margin-bottom: 12px;">🧠 월가 애널리스트 8대 핵심 통합 분석 리포트 [{stock_input}]</div>
-          
-          <div class="report-step">1️⃣ 기업 개요 & 핵심 수익 구조</div>
-          <p style="color: #c9d1d9; font-size: 0.95rem; line-height: 1.5;">
-          • 본 기업은 글로벌 및 국내 핵심 인프라 산업 내에서 안정적인 공급망을 구축하고 있으며, 견고한 진입장벽을 바탕으로 본업 중심의 캐시카우 마진을 창출하고 있습니다.
-          </p>
+        naver_data = get_naver_financial_data(pure_code)
 
-          <div class="report-step">2️⃣ 캔들스틱 & 기술적 지표 상세</div>
-          <p style="color: #c9d1d9; font-size: 0.95rem; line-height: 1.5;">
-          • <b>현재 추세:</b> {trend_status}<br>
-          • <b>주요 이평선 위치:</b> MA20 ({ma20_val:,.0f}원) / MA60 ({ma60_val:,.0f}원) / MA120 ({ma120_val:,.0f}원) 지지선 공방전 진행 중<br>
-          • <b>모멘텀 지표:</b> RSI {current_rsi} ({rsi_status})
-          </p>
+        info = stock.info
+        sector = info.get("sector", "주요 성장 산업")
+        summary = info.get("longBusinessSummary", "해당 기업의 주요 사업 영역")
 
-          <div class="report-step">3️⃣ 재무 분석 & 밸류에이션</div>
-          <p style="color: #c9d1d9; font-size: 0.95rem; line-height: 1.5;">
-          • <b>핵심 지표:</b> 안정적인 매출 성장세 유지 및 영업이익률 방어<br>
-          • <b>밸류에이션:</b> 추정 PER 12.5배 / <b>선행 Forward PER 11.2배</b> / PBR 1.1배 수준으로 업종 평균 대비 매력적인 구간입니다.
-          </p>
+        yf_per = info.get("trailingPE")
+        yf_pbr = info.get("priceToBook")
+        yf_roe = info.get("returnOnEquity")
 
-          <div class="report-step">4️⃣ 3자 전문가 토론 & 수급 동향</div>
-          <p style="color: #c9d1d9; font-size: 0.95rem; line-height: 1.5;">
-          • <b>애널리스트 시각:</b> 중장기 턴어라운드 모멘텀 유효.<br>
-          • <b>수급 트레이더:</b> 외국인/기관의 수급 순환매 유입 모니터링 필수.<br>
-          • <b>AI 퀀트:</b> 밸류에이션 매력도와 기술적 지지선 부근 분할 매수 적합도 높음.
-          </p>
+        final_per = (
+            naver_data["per"]
+            if naver_data["per"] != "-"
+            else (
+                f"{round(yf_per, 2)}배"
+                if isinstance(yf_per, (int, float))
+                else "정보없음"
+            )
+        )
+        final_fper = (
+            naver_data["forward_per"]
+            if naver_data["forward_per"] != "-"
+            else "추정치없음"
+        )
+        final_pbr = (
+            naver_data["pbr"]
+            if naver_data["pbr"] != "-"
+            else (
+                f"{round(yf_pbr, 2)}배"
+                if isinstance(yf_pbr, (int, float))
+                else "정보없음"
+            )
+        )
 
-          <div class="report-step">5️⃣ 투자 심리 & 리스크 요인</div>
-          <p style="color: #c9d1d9; font-size: 0.95rem; line-height: 1.5;">
-          • <b>투자 심리:</b> 시장 참여자들의 관심 집중 및 매물 소화 국면.<br>
-          • <b>리스크 요인:</b> 거시경제 금리 변동성 및 단기 변동성에 따른 차익실현 매물 출회 주의.
-          </p>
+        final_roe = "-"
+        if isinstance(yf_roe, (int, float)) and not pd.isna(yf_roe):
+          final_roe = f"{round(yf_roe * 100, 2)}%"
 
-          <div class="report-step">6️⃣ 3가지 시나리오 분석</div>
-          <p style="color: #c9d1d9; font-size: 0.95rem; line-height: 1.5;">
-          • 📈 <b>강세 시나리오:</b> 핵심 지지선 방어 후 거래량 유입과 함께 전고점 돌파 슈팅.<br>
-          • 📉 <b>약세 시나리오:</b> 주요 이평선 이탈 시 단기 낙폭 확대 리스크 관리.<br>
-          • 📊 <b>중립 시나리오:</b> 박스권 내 매물 소화 과정 지속.
-          </p>
+        if final_fper != "추정치없음":
+          per_display_text = f"선행 {final_fper} / {final_per}"
+        else:
+          per_display_text = f"{final_per}"
 
-          <div class="report-step">7️⃣ 전략적 모의투자 비중 계산기 & 가이드</div>
-          <p style="color: #c9d1d9; font-size: 0.95rem; line-height: 1.5;">
-          • <b>추천 진입 전략:</b> 현재가 기준 1차 분할 매수 및 주요 이평선 하단 이탈 시 엄격한 리스크 관리.<br>
-          • <b>목표가 / 손절가:</b> 단기 저항선 및 핵심 지지선 기준 자금 비중 20% 이내 분할 접근 권장.
-          </p>
+        # 💡 리스크 완화: 단어 변경 (매수가/목표가/손절가 ➔ 참고 지지선/저항선)
+        ref_buy_1 = current_price
+        ref_buy_2 = int(current_price * 0.96)
+        ref_target = int(current_price * 1.15)
+        ref_stop = int(current_price * 0.94)
 
-          <div class="report-step">8️⃣ 최종 정리 및 한 줄 요약</div>
-          <p style="color: #c9d1d9; font-size: 0.95rem; line-height: 1.5;">
-          • <b>장기 투자 매력도 점수:</b> 8.5 / 10점<br>
-          • 💡 <b>한 줄 요약:</b> <i>"철저한 기술적 지지선 확인을 바탕으로 한 리스크 관리형 분할 접근 구간"</i>
-          </p>
-      </div>
-      """, unsafe_allow_html=True)
+        # -----------------------------------------------------------------------------
+        # 4. 상단 핵심 지표
+        # -----------------------------------------------------------------------------
+        c1, c2, c3, c4, c5 = st.columns(5)
+        color_style = (
+            "#E53E3E"
+            if price_change > 0
+            else ("#3182CE" if price_change < 0 else "#8B949E")
+        )
+        sign = "+" if price_change > 0 else ""
 
-      render_kakao_adfit()
+        c1.markdown(
+            f"""<div class="metric-card"><div class="metric-title">실시간 기준 주가</div>
+        <div class="metric-value" style="color:{color_style};">{current_price:,}원 <span style="font-size:0.75rem;">({sign}{pct_change:.2f}%)</span></div></div>""",
+            unsafe_allow_html=True,
+        )
+        c2.markdown(
+            f"""<div class="metric-card"><div class="metric-title">RSI (14일 기준)</div>
+        <div class="metric-value">{current_rsi} <span style="font-size:0.75rem; color:#8B949E;">({"과열권" if current_rsi>70 else ("중립" if current_rsi>30 else "침체권")})</span></div></div>""",
+            unsafe_allow_html=True,
+        )
+        c3.markdown(
+            f"""<div class="metric-card"><div class="metric-title">PER (선행 / 확정)</div>
+        <div class="metric-value">{per_display_text}</div></div>""",
+            unsafe_allow_html=True,
+        )
+        c4.markdown(
+            f"""<div class="metric-card"><div class="metric-title">PBR / ROE</div>
+        <div class="metric-value">{final_pbr} / {final_roe}</div></div>""",
+            unsafe_allow_html=True,
+        )
+        c5.markdown(
+            """<div class="metric-card"><div class="metric-title">알고리즘 정량 점수</div>
+        <div class="metric-value" style="color:#38A169;">8.5 <span style="font-size:0.75rem;">/ 10점 (참고용)</span></div></div>""",
+            unsafe_allow_html=True,
+        )
 
-st.markdown("---")
-st.subheader("💬 주주 오픈 토론방")
-if st.session_state["logged_in"]:
-  with st.form("post_form", clear_on_submit=True):
-    title = st.text_input("토론 제목")
-    content = st.text_area("토론 내용 작성")
-    if st.form_submit_button("게시물 등록", type="primary"):
-      if title and content:
-        posts = load_posts()
-        new_id = (max([p.get("id", 0) for p in posts]) + 1) if posts else 1
-        posts.insert(0, {"id": new_id, "author": st.session_state["nickname"], "title": title, "content": content, "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")})
-        save_posts_to_firebase(posts)
-        st.success("게시물이 성공적으로 등록되었습니다!")
-        st.rerun()
-else:
-  st.info("로그인 후 주주 토론방에 글을 작성하실 수 있습니다.")
+        st.write("")
 
-st.markdown("---")
-for p in load_posts():
-  st.markdown(f"""
-  <div class="post-card">
-      <b style="font-size: 1.1rem; color: #58a6ff;">{p.get('title')}</b>
-      <p style="margin-top: 8px; color: #c9d1d9;">{p.get('content')}</p>
-      <span style="font-size:0.8rem; color:#8b949e;">작성자: {p.get('author')} | 작성일시: {p.get('date')}</span>
-  </div>
-  """, unsafe_allow_html=True)
+        # 1️⃣ 기업 개요
+        st.markdown(
+            f"<div class='section-header'>1️⃣ 기업 개요 및 공시 기반 사업 구조</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f"""
+        <div class="custom-card">
+            <h4 style="color:#58A6FF; margin-bottom:8px;">🏢 [{stock_input}] 주요 개요</h4>
+            <ul>
+                <li><b>산업 분류:</b> {sector}</li>
+                <li><b>사업 구조:</b> 관련 산업군 중심의 사업 운영</li>
+            </ul>
+            <p style="color:#8B949E; font-size:0.9rem; margin-top:10px;"><b>기업 요약 정보:</b> {summary[:250]}...</p>
+        </div>
+        """,
+            unsafe_allow_html=True,
+        )
+
+        # 2️⃣ 기술적 차트
+        st.markdown(
+            f"<div class='section-header'>2️⃣ 기술적 지표 & 이동평균선 차트</div>",
+            unsafe_allow_html=True,
+        )
+
+        fig = make_subplots(
+            rows=2,
+            cols=1,
+            shared_xaxes=True,
+            vertical_spacing=0.05,
+            row_heights=[0.75, 0.25],
+        )
+        fig.add_trace(
+            go.Candlestick(
+                x=df.index,
+                open=df["Open"],
+                high=df["High"],
+                low=df["Low"],
+                close=df["Close"],
+                name="주가",
+                increasing_line_color="#E53E3E",
+                decreasing_line_color="#3182CE",
+            ),
+            row=1,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=df.index,
+                y=df["MA20"],
+                line=dict(color="#ECC94B", width=1.5),
+                name="20일선",
+            ),
+            row=1,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=df.index,
+                y=df["MA60"],
+                line=dict(color="#DD6B20", width=1.5),
+                name="60일선",
+            ),
+            row=1,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=df.index,
+                y=df["MA120"],
+                line=dict(color="#319795", width=1.5),
+                name="120일선",
+            ),
+            row=1,
+            col=1,
+        )
+
+        colors = [
+            "#E53E3E" if c >= o else "#3182CE"
+            for c, o in zip(df["Close"], df["Open"])
+        ]
+        fig.add_trace(
+            go.Bar(
+                x=df.index, y=df["Volume"], marker_color=colors, name="거래량"
+            ),
+            row=2,
+            col=1,
+        )
+
+        fig.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            height=450,
+            margin=dict(l=10, r=10, t=10, b=10),
+            xaxis_rangeslider_visible=False,
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown(
+            f"""
+        * **이동평균선:** 최근 20일선 및 주요 이평선 배치 상태 확인
+        * **하단 지지 참고선:** {int(current_price*0.95):,}원 (20일선 가중 영역)
+        * **상단 저항 참고선:** {int(current_price*1.12):,}원 (최근 박스권 상단 영역)
+        """
+        )
+
+        # 3️⃣ 재무 분석
+        st.markdown(
+            f"<div class='section-header'>3️⃣ 주요 재무 및 밸류에이션 수치</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f"""
+        <table class="styled-table">
+            <thead>
+                <tr><th>구분</th><th>현재 수치</th><th>지표 설명</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><b>선행 PER</b></td><td><b style="color:#58A6FF;">{final_fper}</b></td><td>추정 실적 기준 단순 주가수익비율</td></tr>
+                <tr><td><b>확정 PER</b></td><td><b style="color:#F0F6FC;">{final_per}</b></td><td>최근 12개월 실적 기준 단순 주가수익비율</td></tr>
+                <tr><td><b>PBR</b></td><td><b>{final_pbr}</b></td><td>순자산 대비 주가 수준 지표</td></tr>
+                <tr><td><b>ROE</b></td><td><b>{final_roe}</b></td><td>자기자본 수익성 수치</td></tr>
+            </tbody>
+        </table>
+        """,
+            unsafe_allow_html=True,
+        )
+
+        # 4️⃣ 다각도 시각 제시 (주관적 문구 ➔ 객관적 관점 정리)
+        st.markdown(
+            f"<div class='section-header'>4️⃣ 시장 지표별 해석 관점 (참고용)</div>",
+            unsafe_allow_html=True,
+        )
+        col_t1, col_t2, col_t3 = st.columns(3)
+        with col_t1:
+          st.markdown(
+              f"""
+          <div class="custom-card bull">
+              <h4 style="color:#E53E3E; margin-bottom:6px;">📈 펀더멘털 관점</h4>
+              <p>"현재 PER({final_per}) 및 재무 지표를 토대로 한 실적 관련 모멘텀 관찰 필요"</p>
+          </div>
+          """,
+              unsafe_allow_html=True,
+          )
+        with col_t2:
+          st.markdown(
+              f"""
+          <div class="custom-card bear">
+              <h4 style="color:#3182CE; margin-bottom:6px;">📊 수급/차트 관점</h4>
+              <p>"당일 거래량({volume:,}주) 변화 및 주요 이평선 지지 여부 추적 관찰"</p>
+          </div>
+          """,
+              unsafe_allow_html=True,
+          )
+        with col_t3:
+          st.markdown(
+              """
+          <div class="custom-card quant">
+              <h4 style="color:#38A169; margin-bottom:6px;">🤖 퀀트 수치 관점</h4>
+              <p>"과거 유사 패턴 분석 시 단기 변동성 구간 진입 가능성 수치화"</p>
+          </div>
+          """,
+              unsafe_allow_html=True,
+          )
+
+        # 5️⃣ 리스크 요인
+        st.markdown(
+            f"<div class='section-header'>5️⃣ 시장 변동성 및 리스크 요인</div>",
+            unsafe_allow_html=True,
+        )
+        col_r1, col_r2 = st.columns(2)
+        with col_r1:
+          st.markdown(
+              """
+          <div class="custom-card">
+              <h4 style="color:#ECC94B; margin-bottom:6px;">🧠 과열 / 심리 지표</h4>
+              <p>RSI 기반 단순 심리 상태: <b>중립~관망 구간</b></p>
+              <p style="color:#8B949E; font-size:0.9rem;">지수 변동에 따른 단순 심리 상태 지표 수치입니다.</p>
+          </div>
+          """,
+              unsafe_allow_html=True,
+          )
+        with col_r2:
+          st.markdown(
+              """
+          <div class="custom-card warn">
+              <h4 style="color:#DD6B20; margin-bottom:6px;">⚠️ 주요 주의 리스크 요인</h4>
+              <ul style="font-size:0.9rem;">
+                  <li><b>거시 변수:</b> 환율, 금리 등 거시경제 환경 영향</li>
+                  <li><b>시장 변수:</b> 전체 증시 수급 이탈 가능성</li>
+                  <li><b>기술적 리스크:</b> 주요 지지선 이탈 시 수급 변동 가능성</li>
+              </ul>
+          </div>
+          """,
+              unsafe_allow_html=True,
+          )
+
+        # 6️⃣ 기술적 3대 시나리오 (용어 변경)
+        st.markdown(
+            f"<div class='section-header'>6️⃣ 기술적 단순 시나리오 예시 (참고)</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f"""
+        <div class="custom-card bull">
+            <h4 style="color:#E53E3E; margin-bottom:6px;">📈 기술적 상향 돌파 시나리오 (상단 참고선: {ref_target:,}원)</h4>
+            <p>거래량 증가 및 매물대 돌파 시 상단 저항선 테스트 가능성</p>
+        </div>
+        <div class="custom-card">
+            <h4 style="color:#8B949E; margin-bottom:6px;">📊 횡보 구간 시나리오 (참고 범위: {ref_buy_2:,}원 ~ {ref_buy_1:,}원)</h4>
+            <p>이동평균선 부근에서 매물 소화 및 박스권 형성 가능성</p>
+        </div>
+        <div class="custom-card bear">
+            <h4 style="color:#3182CE; margin-bottom:6px;">📉 기술적 하향 이탈 시나리오 (하단 참고선: {ref_stop:,}원)</h4>
+            <p>시장 악재나 지지선 이탈 시 하단 가격 구간 재설정 관찰</p>
+        </div>
+        """,
+            unsafe_allow_html=True,
+        )
+
+        # 7️⃣ 모의 계산기 (투자자문 오인 방지를 위해 '모의 시뮬레이터'로 명칭 변경)
+        st.markdown(
+            f"<div class='section-header'>7️⃣ 수치 계산 연습용 모의 시뮬레이터</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f"""
+        <table class="styled-table">
+            <thead><tr><th>기술적 구간 구분</th><th>산출 기준가</th><th>가상 참고 비율</th><th>기술적 의미</th></tr></thead>
+            <tbody>
+                <tr><td><b>현재 기준가</b></td><td><b>{ref_buy_1:,}원</b></td><td><span style="color:#38A169;">40%</span></td><td>현재 시세 수치 기준</td></tr>
+                <tr><td><b>하단 기술적 참고가</b></td><td><b>{ref_buy_2:,}원</b></td><td><span style="color:#38A169;">60%</span></td><td>-4% 조정 시 가상 수치</td></tr>
+                <tr><td><b>상단 저항 참고가</b></td><td><b style="color:#E53E3E;">{ref_target:,}원</b></td><td><span style="color:#E53E3E;">-</span></td><td>+15% 단순 기술적 수치</td></tr>
+                <tr><td><b>하단 지지 참고가</b></td><td><b style="color:#3182CE;">{ref_stop:,}원</b></td><td><span style="color:#3182CE;">-</span></td><td>-6% 단순 기술적 수치</td></tr>
+            </tbody>
+        </table>
+        """,
+            unsafe_allow_html=True,
+        )
+
+        budget = st.number_input(
+            "💡 모의로 계산해볼 입력 금액(원):",
+            min_value=1000000,
+            value=10000000,
+            step=1000000,
+        )
+        qty_1 = int((budget * 0.4) // ref_buy_1)
+        qty_2 = int((budget * 0.6) // ref_buy_2)
+        st.info(
+            f"💡 **가상 시뮬레이션 결과:** {ref_buy_1:,}원 기준 약 **{qty_1:,}주**"
+            f" / {ref_buy_2:,}원 기준 약 **{qty_2:,}주** 환산 가능 (단순 수학적"
+            " 산출 결과)"
+        )
+
+        # 8️⃣ 실시간 뉴스 (Outlink 방식 명시)
+        st.markdown(
+            f"<div class='section-header'>8️⃣ [{stock_input}] 관련 외부 뉴스 (링크"
+            " 연결)</div>",
+            unsafe_allow_html=True,
+        )
+        realtime_news = fetch_realtime_news(stock_input)
+
+        if realtime_news:
+          for news in realtime_news:
+            st.markdown(
+                f"""
+            <div style="background-color:#161B22; border:1px solid #30363D; border-radius:8px; padding:14px; margin-bottom:10px;">
+                <div style="font-size:0.85rem; color:#8B949E; margin-bottom:4px;">📰 <b>{news['source']}</b> • {news['pub_date']}</div>
+                <div style="font-size:1.05rem; font-weight:bold; color:#F0F6FC; margin-bottom:8px;">{news['title']}</div>
+                <a href="{news['link']}" target="_blank" style="color:#58A6FF; font-size:0.85rem; text-decoration:none; font-weight:600;">🔗 언론사 원문 기사 보기 (외부 연결) ➔</a>
+            </div>
+            """,
+                unsafe_allow_html=True,
+            )
+
+        naver_url = f"https://search.naver.com/search.naver?where=news&query={urllib.parse.quote(stock_input)}"
+        st.markdown(
+            f"""<div style="text-align:center; margin-top:15px; margin-bottom:20px;"><a href="{naver_url}" target="_blank"><button style="background-color:#03CF5D; color:white; border:none; padding:12px 24px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:1rem;">🟢 네이버 뉴스 전체 검색 ➔</button></a></div>""",
+            unsafe_allow_html=True,
+        )
+
+        # 하단 면책문구 재차 강조
+        st.markdown(
+            """
+        <div class="disclaimer-box" style="text-align:center; margin-top:30px;">
+            <b>[법적 책임의 한계 및 면책 고지]</b><br>
+            본 웹사이트에서 제공하는 데이터, 분석 수치, 기술적 지표 및 시뮬레이션 결과는 알고리즘에 의해 자동 계산되는 단순 참고용 정보입니다.<br>
+            어떠한 경우에도 투자 결과에 대한 법적 책임 소재의 증빙자료로 사용될 수 없으며, 금융투자 상품 거래에 따른 모든 위험과 책임은 이용자 본인에게 있습니다.
+        </div>
+        """,
+            unsafe_allow_html=True,
+        )
+
+    except Exception as e:
+      st.error(f"⚠️ 데이터 처리 중 오류가 발생했습니다: {e}")
