@@ -179,6 +179,7 @@ def get_stock_code(user_input):
   if cleaned.isdigit() and len(cleaned) == 6:
     return cleaned
   
+  # 정확한 기본 매핑 사전 확장
   fallback_map = {
       "삼성전자": "005930",
       "카카오": "035720",
@@ -187,9 +188,28 @@ def get_stock_code(user_input):
       "LG에너지솔루션": "373220",
       "현대차": "005380",
       "에코프로": "086520",
-      "포스코홀딩스": "005490"
+      "포스코홀딩스": "005490",
+      "셀트리온": "068270",
+      "기아": "000270"
   }
-  return fallback_map.get(cleaned, "005930")
+  if cleaned in fallback_map:
+    return fallback_map[cleaned]
+
+  # 네이버 증권 자동 검색 연동 (정확한 종목 코드 추출)
+  try:
+    encoded_query = urllib.parse.quote(cleaned)
+    url = f"https://ac.finance.naver.com/ac?q={encoded_query}&target=stock"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    res = requests.get(url, headers=headers, timeout=3)
+    if res.status_code == 200:
+      items = res.json().get("items", [])
+      if items and len(items[0]) > 0:
+        # 첫 번째 검색 결과의 코드 반환
+        return items[0][0][0]
+  except Exception:
+    pass
+
+  return "005930" # 최종 실패 시 삼성전자
 
 @st.cache_data(ttl=1800)
 def fetch_stock_market_data(code):
@@ -303,12 +323,12 @@ with tab_analysis:
         current_rsi = round(float(100 - (100 / (1 + (gain / loss).iloc[-1]))), 1)
 
         c1, c2, c3, c4 = st.columns(4)
-        c1.markdown(f'<div class="metric-card"><div class="metric-title">실시간 주가</div><div class="metric-value">{current_price:,}원 ({pct_change:+.2f}%)</div></div>', unsafe_allow_html=True)
+        c1.markdown(f'<div class="metric-card"><div class="metric-title">실시간 주가 ({stock_input})</div><div class="metric-value">{current_price:,}원 ({pct_change:+.2f}%)</div></div>', unsafe_allow_html=True)
         c2.markdown(f'<div class="metric-card"><div class="metric-title">RSI (14)</div><div class="metric-value">{current_rsi}</div></div>', unsafe_allow_html=True)
         c3.markdown(f'<div class="metric-card"><div class="metric-title">추정 PER</div><div class="metric-value">{fin_info["per"]}</div></div>', unsafe_allow_html=True)
         c4.markdown(f'<div class="metric-card"><div class="metric-title">추정 PBR</div><div class="metric-value">{fin_info["pbr"]}</div></div>', unsafe_allow_html=True)
 
-        st.markdown("<div class='section-header'>테크니컬 차트 & 이동평균선 (MA 5, 20, 60)</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='section-header'>{stock_input} 테크니컬 차트 & 이동평균선 (MA 5, 20, 60)</div>", unsafe_allow_html=True)
         fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25])
         
         # 캔들스틱
