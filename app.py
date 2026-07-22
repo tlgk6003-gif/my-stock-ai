@@ -12,7 +12,7 @@ st.caption(
 )
 
 try:
-    hf_token = st.secrets["HF_TOKEN"].strip()
+    hf_token = st.secrets["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"].strip()
 except Exception:
     hf_token = ""
 
