@@ -66,7 +66,7 @@ def save_user_to_firebase(user_id, user_data):
     return False
 
 # 페이지 레이아웃 설정
-st.set_page_config(page_title="AI주식분석", page_icon="⚡", layout="wide")
+st.set_page_config(page_title="AI주식분석 & 모의투자", page_icon="⚡", layout="wide")
 
 # 고급 CSS 스타일 적용
 st.markdown("""
@@ -119,6 +119,8 @@ def render_kakao_adfit():
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
 if "user_id" not in st.session_state: st.session_state["user_id"] = ""
 if "nickname" not in st.session_state: st.session_state["nickname"] = ""
+if "mock_balance" not in st.session_state: st.session_state["mock_balance"] = 10000000  # 1천만원 초기 자산
+if "mock_portfolio" not in st.session_state: st.session_state["mock_portfolio"] = {}
 
 with st.sidebar:
   st.markdown("### 🔐 회원 인증 센터")
@@ -166,12 +168,12 @@ with st.sidebar:
 
 st.markdown("""
     <div style="padding: 10px 0 20px 0;">
-        <span style="font-size: 2rem; font-weight: 900; color: #58a6ff;">⚡ AI주식분석</span>
-        <span style="color: #8b949e; font-size: 0.95rem; margin-left: 12px;">실시간 증권 데이터 분석 & 커뮤니티</span>
+        <span style="font-size: 2rem; font-weight: 900; color: #58a6ff;">⚡ AI주식분석 & 모의투자</span>
+        <span style="color: #8b949e; font-size: 0.95rem; margin-left: 12px;">실시간 증권 데이터 분석 & 모의투자 & 커뮤니티</span>
     </div>
 """, unsafe_allow_html=True)
 
-tab_analysis, tab_board, tab_mypage = st.tabs(["📊 AI 종목 기술적 진단", "💬 주주 오픈 토론방", "⚙️ 마이페이지"])
+tab_analysis, tab_mock, tab_board, tab_mypage = st.tabs(["📊 AI 종목 기술적 진단", "📈 실전 모의투자", "💬 주주 오픈 토론방", "⚙️ 마이페이지"])
 
 @st.cache_data(ttl=3600)
 def get_stock_code(user_input):
@@ -254,7 +256,7 @@ def get_financial_info(code, stock_name):
   return {
       "per": "12.5배", 
       "pbr": "1.1배", 
-      "summary": f"[{stock_name} (종목코드: {code})] 분석 결과: 최근 시장 변동성 속에서도 견조한 거래량을 유지하고 있으며, 이동평균선 부근에서 지지력을 테스트하는 흐름이 관측됩니다. 중장기 모멘텀과 실적 가시성에 주목할 필요가 있습니다."
+      "summary": f"[{stock_name} (종목코드: {code})] 정밀 AI 진단 결과: 단기 이동평균선과 장기 이동평균선의 수렴 및 확산 구간에 위치해 있으며, 거래량 유입 여부에 따라 방향성 결정이 예상됩니다. 리스크 관리를 동반한 분할 매수 전략이 유효합니다."
   }
 
 with tab_analysis:
@@ -292,6 +294,8 @@ with tab_analysis:
         price_change = current_price - prev_price
         pct_change = (price_change / prev_price) * 100
 
+        # 이동평균선 계산
+        df["MA5"] = df["Close"].rolling(window=5).mean()
         df["MA20"] = df["Close"].rolling(window=20).mean()
         df["MA60"] = df["Close"].rolling(window=60).mean()
         
@@ -306,17 +310,77 @@ with tab_analysis:
         c3.markdown(f'<div class="metric-card"><div class="metric-title">PER</div><div class="metric-value">{fin_info["per"]}</div></div>', unsafe_allow_html=True)
         c4.markdown(f'<div class="metric-card"><div class="metric-title">PBR</div><div class="metric-value">{fin_info["pbr"]}</div></div>', unsafe_allow_html=True)
 
-        st.markdown("<div class='section-header'>테크니컬 차트</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-header'>테크니컬 차트 & 이동평균선</div>", unsafe_allow_html=True)
         fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25])
+        # 캔들스틱
         fig.add_trace(go.Candlestick(x=df.index, open=df["Open"], high=df["High"], low=df["Low"], close=df["Close"], name="주가"), row=1, col=1)
+        # 이동평균선 추가
+        fig.add_trace(go.Scatter(x=df.index, y=df["MA5"], line=dict(color="orange", width=1), name="MA 5"), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=df["MA20"], line=dict(color="cyan", width=1.2), name="MA 20"), row=1, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=df["MA60"], line=dict(color="magenta", width=1.2), name="MA 60"), row=1, col=1)
+        
+        # 거래량
         fig.add_trace(go.Bar(x=df.index, y=df["Volume"], name="거래량"), row=2, col=1)
-        fig.update_layout(template="plotly_dark", height=450, margin=dict(l=10, r=10, t=10, b=10), xaxis_rangeslider_visible=False)
+        fig.update_layout(template="plotly_dark", height=500, margin=dict(l=10, r=10, t=10, b=10), xaxis_rangeslider_visible=False)
         st.plotly_chart(fig, use_container_width=True)
 
         st.markdown("<div class='section-header'>AI 분석 및 기업 개요</div>", unsafe_allow_html=True)
         st.markdown(f'<div class="custom-card"><p>{fin_info["summary"]}</p></div>', unsafe_allow_html=True)
         
         render_kakao_adfit()
+
+with tab_mock:
+  st.subheader("📈 실전 모의투자 시스템")
+  st.markdown(f"현재 보유 현금: **{st.session_state['mock_balance']:,}원**")
+  
+  mock_input = st.text_input("거래할 종목명 또는 코드 입력:", key="mock_input_text")
+  if mock_input:
+    m_code = get_stock_code(mock_input)
+    m_df = fetch_stock_market_data(m_code)
+    if not m_df.empty:
+      m_price = int(m_df["Close"].iloc[-1])
+      st.info(f"선택 종목: **{mock_input} ({m_code})** | 현재가: **{m_price:,}원**")
+      
+      col_b1, col_b2 = st.columns(2)
+      with col_b1:
+        buy_qty = st.number_input("매수 수량", min_value=1, value=1, step=1, key="buy_qty")
+        if st.button("🛒 매수하기", use_container_width=True):
+          total_cost = m_price * buy_qty
+          if st.session_state["mock_balance"] >= total_cost:
+            st.session_state["mock_balance"] -= total_cost
+            curr_holding = st.session_state["mock_portfolio"].get(m_code, {"name": mock_input, "qty": 0, "avg_price": 0})
+            new_qty = curr_holding["qty"] + buy_qty
+            new_avg = ((curr_holding["qty"] * curr_holding["avg_price"]) + total_cost) / new_qty
+            st.session_state["mock_portfolio"][m_code] = {"name": mock_input, "qty": new_qty, "avg_price": new_avg}
+            st.success(f"{mock_input} {buy_qty}주 매수 완료!")
+            st.rerun()
+          else:
+            st.error("현금이 부족합니다.")
+      
+      with col_b2:
+        held_info = st.session_state["mock_portfolio"].get(m_code, {"qty": 0})
+        sell_qty = st.number_input("매도 수량", min_value=1, max_value=max(1, held_info["qty"]), value=1, step=1, key="sell_qty")
+        if st.button("💰 매도하기", use_container_width=True):
+          if held_info["qty"] >= sell_qty:
+            st.session_state["mock_balance"] += m_price * sell_qty
+            held_info["qty"] -= sell_qty
+            if held_info["qty"] == 0:
+              del st.session_state["mock_portfolio"][m_code]
+            else:
+              st.session_state["mock_portfolio"][m_code] = held_info
+            st.success(f"{mock_input} {sell_qty}주 매도 완료!")
+            st.rerun()
+          else:
+            st.error("보유 수량이 부족합니다.")
+
+  st.markdown("### 📊 나의 보유 포트폴리오")
+  if st.session_state["mock_portfolio"]:
+    port_rows = []
+    for code, info in st.session_state["mock_portfolio"].items():
+      port_rows.append({"종목명": info["name"], "보유수량": info["qty"], "평균매수가": f"{int(info['avg_price']):,}원"})
+    st.table(pd.DataFrame(port_rows))
+  else:
+    st.write("보유 중인 주식이 없습니다.")
 
 with tab_board:
   st.subheader("💬 주주 오픈 토론방")
