@@ -6,6 +6,7 @@ import urllib.parse
 import xml.etree.ElementTree as ET
 from deep_translator import GoogleTranslator
 import pandas as pd
+import pandas_datareader as pdr  # 추가: KRX 전종목 동적 연동용
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import requests
@@ -15,7 +16,7 @@ import yfinance as yf
 # =============================================================================
 # 🔥 [수익화 설정] 본인의 쿠팡 파트너스 링크를 아래 큰따옴표 안에 넣어주세요.
 # =============================================================================
-COUPANG_LINK = "https://link.coupang.com/a/XXXXXX"  # <--- 본인 파트너스 단축 URL 넣기
+COUPANG_LINK = "https://link.coupang.com/a/fAS0LGAFK8"  # <--- 본인 파트너스 단축 URL 넣기
 
 # Firebase 실시간 데이터베이스 URL
 FIREBASE_URL = "https://mystockcommunity-dd967-default-rtdb.firebaseio.com/"
@@ -248,7 +249,7 @@ st.markdown(
 )
 
 # -----------------------------------------------------------------------------
-# 세션 상태 초기화 (로그인 여부 및 닉네임 관리)
+# 세션 상태 초기화
 # -----------------------------------------------------------------------------
 if "logged_in" not in st.session_state:
   st.session_state["logged_in"] = False
@@ -338,7 +339,7 @@ with st.sidebar:
 
   st.markdown("---")
   st.markdown(
-      "<div style='font-size:0.8rem; color:#8b949e;'>⚡ AI 주식분석 플랫폼 v2.7<br>© 2026 Stock Community</div>",
+      "<div style='font-size:0.8rem; color:#8b949e;'>⚡ AI 주식분석 플랫폼 v3.0<br>© 2026 Stock Community</div>",
       unsafe_allow_html=True,
   )
 
@@ -357,12 +358,24 @@ tab_analysis, tab_board, tab_mypage = st.tabs(
     ["📊 AI 종목 기술적 진단", "💬 주주 오픈 토론방", "⚙️ 마이페이지"]
 )
 
+
 # -----------------------------------------------------------------------------
-# 2. 크롤링 및 유틸리티 함수 (종목명 검색 강화 & 키이스트/E8 등 예외 대응)
+# 2. KRX 전 종목 자동 연동 및 검색 엔진 (코스피/코스닥 전체 완벽 커버)
 # -----------------------------------------------------------------------------
+@st.cache_data(ttl=86400)
+def get_krx_stock_master():
+  """KRX 상장된 모든 코스피/코스닥 종목의 명칭과 코드를 동적으로 불러옴"""
+  try:
+    url = "https://kind.krx.co.kr/corpgeneral/corpList.do?method=download&searchType=13"
+    df = pd.read_html(url, header=0)[0]
+    df["종목코드"] = df["종목코드"].astype(str).str.zfill(6)
+    return df
+  except Exception:
+    return pd.DataFrame()
+
+
 @st.cache_data(ttl=3600)
 def search_naver_stock_code(query):
-  """네이버 금융 자동완성 API를 활용해 한글/영문 종목명으로 6자리 종목코드 검색"""
   try:
     url = f"https://ac.finance.naver.com/ac?q={urllib.parse.quote(query)}&target=stock"
     headers = {
@@ -375,7 +388,7 @@ def search_naver_stock_code(query):
       data = res.json()
       items = data.get("items", [])
       if items and len(items[0]) > 0:
-        return items[0][0]  # 6자리 종목코드
+        return items[0][0]
   except Exception:
     pass
   return None
@@ -468,11 +481,11 @@ def fetch_stock_history(ticker_symbol):
 
 
 def get_ticker_symbol_and_code(user_input):
-  user_input = user_input.strip()
+  cleaned_input = user_input.strip()
 
-  # 1. 사용자가 6자리 숫자로 직접 입력한 경우
-  if user_input.isdigit() and len(user_input) == 6:
-    test_url = f"https://finance.naver.com/item/main.naver?code={user_input}"
+  # 1. 6자리 숫자로 직접 입력한 경우
+  if cleaned_input.isdigit() and len(cleaned_input) == 6:
+    test_url = f"https://finance.naver.com/item/main.naver?code={cleaned_input}"
     try:
       headers = {
           "User-Agent": (
@@ -481,43 +494,48 @@ def get_ticker_symbol_and_code(user_input):
       }
       resp = requests.get(test_url, headers=headers, timeout=3)
       if "KOSDAQ" in resp.text:
-        return f"{user_input}.KQ", user_input
+        return f"{cleaned_input}.KQ", cleaned_input
       else:
-        return f"{user_input}.KS", user_input
+        return f"{cleaned_input}.KS", cleaned_input
     except:
-      return f"{user_input}.KQ", user_input
+      return f"{cleaned_input}.KQ", cleaned_input
 
-  # 2. 주요 종목 수동 하드코딩 매핑 (키이스트 등 영문/특수코드 포함)
-  mapping = {
-      "삼성전자": ("005930.KS", "005930"),
-      "SK하이닉스": ("000660.KS", "000660"),
-      "키이스트": ("054780.KQ", "054780"),
-      "대원전선": ("006340.KS", "006340"),
-      "한화오션": ("042660.KS", "042660"),
-      "LG에너지솔루션": ("373220.KS", "373220"),
-      "현대차": ("005380.KS", "005380"),
-      "POSCO홀딩스": ("005490.KS", "005490"),
-      "에코프로비엠": ("247540.KQ", "247540"),
-      "에코프로": ("086520.KQ", "086520"),
-      "알테오젠": ("196170.KQ", "196170"),
-      "HLB": ("028300.KQ", "028300"),
+  # 2. KRX 전체 종목 마스터에서 회사명으로 일치하는 코드 검색
+  krx_df = get_krx_stock_master()
+  if not krx_df.empty:
+    matched = krx_df[krx_df["회사명"].str.lower() == cleaned_input.lower()]
+    if not matched.empty:
+      code = matched.iloc[0]["종목코드"]
+      test_url = f"https://finance.naver.com/item/main.naver?code={code}"
+      try:
+        resp = requests.get(
+            test_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=3
+        )
+        if "KOSDAQ" in resp.text:
+          return f"{code}.KQ", code
+        else:
+          return f"{code}.KS", code
+      except:
+        return f"{code}.KQ", code
+
+  # 3. 특수 영문/별칭 매핑 예외 처리 (E8, 스타코링크 등)
+  special_mapping = {
+      "e8": ("418620.KQ", "418620"),
+      "E8": ("418620.KQ", "418620"),
+      "이에이트": ("418620.KQ", "418620"),
+      "스타코링크": ("060240.KQ", "060240"),
   }
+  if cleaned_input.lower() in special_mapping:
+    return special_mapping[cleaned_input.lower()]
 
-  if user_input in mapping:
-    return mapping[user_input]
-
-  # 3. 네이버 금융 자동완성 API 조회
-  found_code = search_naver_stock_code(user_input)
+  # 4. 네이버 금융 자동완성 API 조회
+  found_code = search_naver_stock_code(cleaned_input)
   if found_code:
-    # 6자리 코드가 성공적으로 찾아졌다면 코스피/코스닥 판별
     test_url = f"https://finance.naver.com/item/main.naver?code={found_code}"
     try:
-      headers = {
-          "User-Agent": (
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-          )
-      }
-      resp = requests.get(test_url, headers=headers, timeout=3)
+      resp = requests.get(
+          test_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=3
+      )
       if "KOSDAQ" in resp.text:
         return f"{found_code}.KQ", found_code
       else:
@@ -525,8 +543,7 @@ def get_ticker_symbol_and_code(user_input):
     except:
       return f"{found_code}.KQ", found_code
 
-  # 4. API 검색 실패 시 야후 파이낸스 표준 심볼 변환 시도 (.KQ 기본 부여)
-  return f"{user_input}.KQ", user_input
+  return f"{cleaned_input}.KQ", cleaned_input
 
 
 @st.cache_data(ttl=3600)
@@ -622,8 +639,8 @@ with tab_analysis:
   )
 
   stock_input = st.text_input(
-      "🔍 분석 대상 종목명 또는 6자리 종목코드를 입력하세요:",
-      placeholder="예: 키이스트, 에코프로비엠, 삼성전자, 054780",
+      "🔍 분석 대상 종목명 또는 6자리 종목코드를 입력하세요 (국내 전종목 연동완료):",
+      placeholder="예: 삼성전자, 스타코링크, E8, 에코프로, 005930",
   )
 
   if st.button(
@@ -687,7 +704,7 @@ with tab_analysis:
 
           naver_data = get_naver_financial_data(pure_code)
 
-          sector = info.get("sector", "핵심 성장 섹터")
+          sector = info.get("sector", "국내 상장 주식 / 금융 섹터")
           raw_summary = info.get("longBusinessSummary", "기업 비즈니스 개요")
           summary = translate_to_ko(raw_summary)
 
@@ -966,11 +983,9 @@ with tab_analysis:
 with tab_board:
   st.subheader("💬 주주 오픈 토론방")
   st.caption(
-      "종목 분석 인사이트, 투자 아이디어, 시장 이슈를 주주들과 투명하게"
-      " 공유하고 좋아요와 댓글로 소통하세요."
+      "투자 아이디어, 시장 이슈를 자유롭게 공유하고 좋아요와 댓글로 소통하세요."
   )
 
-  # 로그인 상태 체크 후 글쓰기 허용
   if not st.session_state["logged_in"]:
     st.info(
         "💡 게시글이나 댓글을 작성하려면 사이드바에서 **로그인** 또는"
@@ -979,10 +994,11 @@ with tab_board:
   else:
     with st.expander("✍️ 새 게시글 작성하기 (클릭하여 열기)", expanded=False):
       with st.form("write_post_form", clear_on_submit=True):
-        col_f1, _ = st.columns([2, 4])
-        category = col_f1.selectbox(
-            "관련 종목/분류",
-            ["자유토론", "삼성전자", "에코프로비엠", "알테오젠", "국장종목", "미장종목"],
+        # 관련종목/분류 선택에서 자유토론만 남기고 모두 제거
+        category = "자유토론"
+        st.markdown(
+            f"<div style='font-size:0.9rem; color:#8b949e; margin-bottom:10px;'>📌 분류: <b style='color:#38bdf8;'>{category}</b></div>",
+            unsafe_allow_html=True,
         )
 
         title = st.text_input("글 제목", placeholder="제목을 입력하세요")
@@ -1017,7 +1033,6 @@ with tab_board:
 
   st.markdown("---")
 
-  # 게시글 목록 출력
   posts = load_posts()
 
   if not posts:
@@ -1121,7 +1136,12 @@ with tab_mypage:
     st.warning("🔒 마이페이지를 이용하시려면 먼저 로그인해 주세요.")
   else:
     users_db = load_users()
-    safe_key = st.session_state["user_id"].replace(".", "_").replace("#", "_").replace("$", "_")
+    safe_key = (
+        st.session_state["user_id"]
+        .replace(".", "_")
+        .replace("#", "_")
+        .replace("$", "_")
+    )
     current_user_info = users_db.get(safe_key, {})
 
     st.markdown("---")
@@ -1166,10 +1186,8 @@ with tab_mypage:
         if not new_nickname_input.strip():
           st.warning("변경할 닉네임을 입력해주세요.")
         else:
-          # DB 데이터 갱신
           if safe_key in users_db:
             users_db[safe_key]["nickname"] = new_nickname_input.strip()
-            # Firebase 전체 유저 저장소 업데이트
             try:
               requests.put(
                   f"{FIREBASE_URL}users.json", json=users_db, timeout=5
