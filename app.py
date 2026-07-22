@@ -1,4 +1,5 @@
 import datetime
+import hashlib
 import json
 import re
 import urllib.parse
@@ -21,7 +22,14 @@ FIREBASE_URL = "https://mystockcommunity-dd967-default-rtdb.firebaseio.com/"
 
 
 # -----------------------------------------------------------------------------
-# Firebase 데이터베이스 연동 함수 (게시글 및 댓글 영구 저장)
+# 비밀번호 암호화 함수 (SHA-256)
+# -----------------------------------------------------------------------------
+def hash_password(password):
+  return hashlib.sha256(password.encode()).hexdigest()
+
+
+# -----------------------------------------------------------------------------
+# Firebase 데이터베이스 연동 함수 (게시글 및 회원 정보)
 # -----------------------------------------------------------------------------
 def load_posts():
   try:
@@ -47,6 +55,30 @@ def save_posts_to_firebase(posts):
     requests.put(f"{FIREBASE_URL}posts.json", json=posts, timeout=5)
   except Exception:
     pass
+
+
+def load_users():
+  try:
+    response = requests.get(f"{FIREBASE_URL}users.json", timeout=5)
+    if response.status_code == 200:
+      data = response.json()
+      if data and isinstance(data, dict):
+        return data
+  except Exception:
+    pass
+  return {}
+
+
+def save_user_to_firebase(username, user_data):
+  try:
+    # Firebase 키로 사용할 수 없는 특수문자 방지 가공
+    safe_key = username.replace(".", "_").replace("#", "_").replace("$", "_")
+    requests.put(
+        f"{FIREBASE_URL}users/{safe_key}.json", json=user_data, timeout=5
+    )
+    return True
+  except Exception:
+    return False
 
 
 # -----------------------------------------------------------------------------
@@ -216,6 +248,98 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# -----------------------------------------------------------------------------
+# 세션 상태 초기화 (로그인 여부 관리)
+# -----------------------------------------------------------------------------
+if "logged_in" not in st.session_state:
+  st.session_state["logged_in"] = False
+if "username" not in st.session_state:
+  st.session_state["username"] = ""
+
+# 사이드바를 통한 회원가입 및 로그인 창 구현
+with st.sidebar:
+  st.markdown("### 🔐 회원 인증 센터")
+
+  if not st.session_state["logged_in"]:
+    auth_mode = st.radio("모드 선택", ["로그인", "회원가입"], horizontal=True)
+
+    if auth_mode == "로그인":
+      with st.form("login_form"):
+        login_user = st.text_input("아이디 (닉네임)")
+        login_pw = st.text_input("비밀번호", type="password")
+        login_btn = st.form_submit_button(
+            "로그인", use_container_width=True, type="primary"
+        )
+
+        if login_btn:
+          users_db = load_users()
+          safe_key = (
+              login_user.replace(".", "_")
+              .replace("#", "_")
+              .replace("$", "_")
+          )
+          if safe_key in users_db and users_db[safe_key]["password"] == hash_password(
+              login_pw
+          ):
+            st.session_state["logged_in"] = True
+            st.session_state["username"] = login_user
+            st.success(f"환영합니다, {login_user}님!")
+            st.rerun()
+          else:
+            st.error("아이디 또는 비밀번호가 일치하지 않습니다.")
+
+    else:
+      with st.form("signup_form"):
+        new_user = st.text_input("사용할 아이디 (닉네임)")
+        new_pw = st.text_input("비밀번호", type="password")
+        new_pw_check = st.text_input("비밀번호 확인", type="password")
+        signup_btn = st.form_submit_button(
+            "회원가입 완료", use_container_width=True, type="primary"
+        )
+
+        if signup_btn:
+          if not new_user or not new_pw:
+            st.warning("아이디와 비밀번호를 모두 입력해 주세요.")
+          elif new_pw != new_pw_check:
+            st.error("비밀번호가 일치하지 않습니다.")
+          else:
+            users_db = load_users()
+            safe_key = (
+                new_user.replace(".", "_")
+                .replace("#", "_")
+                .replace("$", "_")
+            )
+            if safe_key in users_db:
+              st.error("이미 존재하는 아이디입니다.")
+            else:
+              user_data = {
+                  "username": new_user,
+                  "password": hash_password(new_pw),
+                  "joined_date": datetime.datetime.now().strftime(
+                      "%Y-%m-%d %H:%M"
+                  ),
+              }
+              if save_user_to_firebase(new_user, user_data):
+                st.success("회원가입 완료! 로그인해 주세요.")
+              else:
+                st.error("회원가입 중 오류가 발생했습니다.")
+  else:
+    st.markdown(
+        f"👤 현재 접속 중: <b style='color:#38bdf8;'>{st.session_state['username']}</b>님",
+        unsafe_allow_html=True,
+    )
+    if st.button("로그아웃", use_container_width=True):
+      st.session_state["logged_in"] = False
+      st.session_state["username"] = ""
+      st.rerun()
+
+  st.markdown("---")
+  st.markdown(
+      "<div style='font-size:0.8rem; color:#8b949e;'>⚡ AI 주식분석 플랫폼 v2.5<br>© 2026 Stock Community</div>",
+      unsafe_allow_html=True,
+  )
+
+# 메인 헤더
 st.markdown(
     """
     <div style="padding: 10px 0 20px 0;">
@@ -346,7 +470,6 @@ def get_ticker_symbol_and_code(user_input):
   return f"{user_input}.KQ", user_input
 
 
-# 영문 요약을 한국어로 번역해 주는 함수
 @st.cache_data(ttl=3600)
 def translate_to_ko(text):
   if not text or text == "기업 비즈니스 개요":
@@ -355,12 +478,9 @@ def translate_to_ko(text):
     translated = GoogleTranslator(source="auto", target="ko").translate(text)
     return translated
   except Exception:
-    return text  # 번역 실패 시 원문 반환
+    return text
 
 
-# =============================================================================
-# 🟢 AI 퀀트 정수 및 진단 산출 함수
-# =============================================================================
 def calculate_quant_score_and_diagnosis(
     info, df, current_rsi, final_per_val, final_pbr_val, final_roe_val
 ):
@@ -510,7 +630,6 @@ with tab_analysis:
 
           sector = info.get("sector", "핵심 성장 섹터")
           raw_summary = info.get("longBusinessSummary", "기업 비즈니스 개요")
-          # 영어 요약을 한국어로 번역
           summary = translate_to_ko(raw_summary)
 
           yf_per = info.get("trailingPE")
@@ -792,49 +911,50 @@ with tab_board:
       " 공유하고 좋아요와 댓글로 소통하세요."
   )
 
-  # 1. 새 글 작성 영역
-  with st.expander("✍️ 새 게시글 작성하기 (클릭하여 열기)", expanded=False):
-    with st.form("write_post_form", clear_on_submit=True):
-      col_f1, col_f2, col_f3 = st.columns([2, 2, 2])
-      author = col_f1.text_input("닉네임", placeholder="익명주주")
-      password = col_f2.text_input(
-          "비밀번호 (삭제용)", type="password", placeholder="4자리 이상"
-      )
-      category = col_f3.selectbox(
-          "관련 종목/분류",
-          ["자유토론", "삼성전자", "에이스테크", "필에너지", "국장종목", "미장종목"],
-      )
+  # 로그인 상태 체크 후 글쓰기 허용
+  if not st.session_state["logged_in"]:
+    st.info(
+        "💡 게시글이나 댓글을 작성하려면 사이드바에서 **로그인** 또는"
+        " **회원가입**을 진행해 주세요."
+    )
+  else:
+    with st.expander("✍️ 새 게시글 작성하기 (클릭하여 열기)", expanded=False):
+      with st.form("write_post_form", clear_on_submit=True):
+        col_f1, _ = st.columns([2, 4])
+        category = col_f1.selectbox(
+            "관련 종목/분류",
+            ["자유토론", "삼성전자", "에이스테크", "필에너지", "국장종목", "미장종목"],
+        )
 
-      title = st.text_input("글 제목", placeholder="제목을 입력하세요")
-      content = st.text_area(
-          "글 내용",
-          placeholder="건전한 토론 문화 조성을 위해 비방 및 불법 광고는 금지됩니다.",
-          height=120,
-      )
+        title = st.text_input("글 제목", placeholder="제목을 입력하세요")
+        content = st.text_area(
+            "글 내용",
+            placeholder="건전한 토론 문화 조성을 위해 비방 및 불법 광고는 금지됩니다.",
+            height=120,
+        )
 
-      submit_btn = st.form_submit_button("🚀 게시글 등록", type="primary")
+        submit_btn = st.form_submit_button("🚀 게시글 등록", type="primary")
 
-      if submit_btn:
-        if not author or not password or not title or not content:
-          st.error("⚠️ 닉네임, 비밀번호, 제목, 내용을 모두 입력해 주세요!")
-        else:
-          posts = load_posts()
-          new_id = (max([p.get("id", 0) for p in posts]) + 1) if posts else 1
-          new_post = {
-              "id": new_id,
-              "author": author,
-              "password": password,
-              "category": category,
-              "title": title,
-              "content": content,
-              "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-              "likes": 0,
-              "comments": [],
-          }
-          posts.insert(0, new_post)
-          save_posts_to_firebase(posts)
-          st.success("✅ 게시글이 성공적으로 영구 등록되었습니다!")
-          st.rerun()
+        if submit_btn:
+          if not title or not content:
+            st.warning("⚠️ 제목과 내용을 모두 입력해 주세요!")
+          else:
+            posts = load_posts()
+            new_id = (max([p.get("id", 0) for p in posts]) + 1) if posts else 1
+            new_post = {
+                "id": new_id,
+                "author": st.session_state["username"],  # 로그인된 계정 이름 사용
+                "category": category,
+                "title": title,
+                "content": content,
+                "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "likes": 0,
+                "comments": [],
+            }
+            posts.insert(0, new_post)
+            save_posts_to_firebase(posts)
+            st.success("✅ 게시글이 성공적으로 영구 등록되었습니다!")
+            st.rerun()
 
   st.markdown("---")
 
@@ -872,18 +992,16 @@ with tab_board:
           st.rerun()
 
       with col_act2:
-        with st.popover("🗑️ 글 삭제"):
-          del_pw = st.text_input(
-              "비밀번호 입력", type="password", key=f"pw_{post['id']}"
-          )
-          if st.button("삭제 확인", key=f"del_{post['id']}"):
-            if del_pw == str(post.get("password")):
-              posts.pop(idx)
-              save_posts_to_firebase(posts)
-              st.success("삭제되었습니다!")
-              st.rerun()
-            else:
-              st.error("비밀번호 불일치")
+        # 본인이 작성한 글이거나 로그인 계정이 일치할 때만 삭제 허용
+        if (
+            st.session_state["logged_in"]
+            and st.session_state["username"] == post.get("author")
+        ):
+          if st.button("🗑️ 내 글 삭제", key=f"del_{post['id']}"):
+            posts.pop(idx)
+            save_posts_to_firebase(posts)
+            st.success("삭제되었습니다!")
+            st.rerun()
 
       comments_list = post.get("comments", [])
       with st.expander(f"💬 댓글 ({len(comments_list)}개)", expanded=False):
@@ -901,32 +1019,31 @@ with tab_board:
         else:
           st.caption("아직 작성된 댓글이 없습니다. 첫 의견을 남겨보세요!")
 
-        with st.form(key=f"comment_form_{post['id']}"):
-          c_col1, c_col2 = st.columns([1, 2])
-          c_author = c_col1.text_input(
-              "닉네임", placeholder="익명", key=f"c_auth_{post['id']}"
-          )
-          c_content = c_col2.text_input(
-              "댓글 내용",
-              placeholder="댓글을 입력하세요...",
-              key=f"c_cont_{post['id']}",
-          )
-          c_submit = st.form_submit_button("댓글 등록")
+        if st.session_state["logged_in"]:
+          with st.form(key=f"comment_form_{post['id']}"):
+            c_content = st.text_input(
+                "댓글 내용",
+                placeholder="댓글을 입력하세요...",
+                key=f"c_cont_{post['id']}",
+            )
+            c_submit = st.form_submit_button("댓글 등록")
 
-          if c_submit:
-            if not c_author or not c_content:
-              st.warning("닉네임과 내용을 모두 입력해 주세요.")
-            else:
-              new_comment = {
-                  "author": c_author,
-                  "content": c_content,
-                  "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-              }
-              if "comments" not in posts[idx]:
-                posts[idx]["comments"] = []
-              posts[idx]["comments"].append(new_comment)
-              save_posts_to_firebase(posts)
-              st.success("댓글이 등록되었습니다!")
-              st.rerun()
+            if c_submit:
+              if not c_content:
+                st.warning("내용을 입력해 주세요.")
+              else:
+                new_comment = {
+                    "author": st.session_state["username"],
+                    "content": c_content,
+                    "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                }
+                if "comments" not in posts[idx]:
+                  posts[idx]["comments"] = []
+                posts[idx]["comments"].append(new_comment)
+                save_posts_to_firebase(posts)
+                st.success("댓글이 등록되었습니다!")
+                st.rerun()
+        else:
+          st.caption("🔒 댓글을 작성하려면 로그인이 필요합니다.")
 
       st.write("")
