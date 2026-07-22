@@ -83,53 +83,23 @@ st.markdown("""
     }
     .ad-badge {
         background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-        color: white;
-        font-size: 0.7rem;
-        font-weight: 800;
-        padding: 4px 10px;
-        border-radius: 6px;
-        margin-right: 8px;
+        color: white; font-size: 0.7rem; font-weight: 800; padding: 4px 10px; border-radius: 6px; margin-right: 8px;
     }
-    .ad-link {
-        color: #38bdf8 !important;
-        font-weight: 700;
-        text-decoration: none;
-        font-size: 1.05rem;
-    }
+    .ad-link { color: #38bdf8 !important; font-weight: 700; text-decoration: none; font-size: 1.05rem; }
     .metric-card {
         background: linear-gradient(145deg, #161b22 0%, #0d1117 100%);
-        border: 1px solid #21262d;
-        border-radius: 12px;
-        padding: 18px;
-        margin-bottom: 14px;
+        border: 1px solid #21262d; border-radius: 12px; padding: 18px; margin-bottom: 14px;
     }
     .metric-title { color: #8b949e; font-size: 0.75rem; font-weight: 700; margin-bottom: 8px; text-transform: uppercase; }
     .metric-value { color: #f0f6fc; font-size: 1.2rem; font-weight: 800; }
     .custom-card {
-        background-color: #161b22;
-        border-left: 4px solid #3b82f6;
-        border-radius: 10px;
-        padding: 20px;
-        margin-bottom: 16px;
+        background-color: #161b22; border-left: 4px solid #3b82f6; border-radius: 10px; padding: 20px; margin-bottom: 16px;
         border-top: 1px solid #21262d; border-right: 1px solid #21262d; border-bottom: 1px solid #21262d;
     }
-    .custom-card.bull { border-left-color: #ef4444; }
-    .custom-card.bear { border-left-color: #3b82f6; }
-    .custom-card.quant { border-left-color: #10b981; }
     .disclaimer-box {
         background: linear-gradient(135deg, #161b22 0%, #0f141c 100%);
-        border: 1px solid rgba(239, 68, 68, 0.4);
-        border-radius: 10px;
-        padding: 16px 20px;
-        margin: 16px 0 24px 0;
-        font-size: 0.82rem;
-        color: #c9d1d9;
+        border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 10px; padding: 16px 20px; margin: 16px 0 24px 0; font-size: 0.82rem; color: #c9d1d9;
     }
-    .styled-table {
-        width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.92em; border-radius: 8px; overflow: hidden; border: 1px solid #30363d;
-    }
-    .styled-table thead tr { background-color: #1f242d; color: #f0f6fc; text-align: left; }
-    .styled-table th, .styled-table td { padding: 14px 18px; border-bottom: 1px solid #30363d; }
     .section-header { font-size: 1.2rem; font-weight: 800; color: #58a6ff; margin-top: 32px; margin-bottom: 14px; border-bottom: 2px solid #21262d; padding-bottom: 8px; }
     .post-card { background-color: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 20px; margin-bottom: 16px; }
     </style>
@@ -204,16 +174,13 @@ st.markdown("""
 
 tab_analysis, tab_board, tab_mypage = st.tabs(["📊 AI 종목 기술적 진단", "💬 주주 오픈 토론방", "⚙️ 마이페이지"])
 
-# =============================================================================
-# 안정화된 데이터 수집 함수 (캐시 강화 및 Rate Limit 회피)
-# =============================================================================
 @st.cache_data(ttl=3600)
 def get_naver_financial_data(code_num):
   url = f"https://finance.naver.com/item/main.naver?code={code_num}"
   headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
   res = {"per": "-", "forward_per": "-", "pbr": "-", "roe": "-"}
   try:
-    time.sleep(0.5) # 서버 차단 방지 지연
+    time.sleep(0.5)
     resp = requests.get(url, headers=headers, timeout=5)
     if resp.status_code == 200:
       text = resp.text
@@ -221,8 +188,6 @@ def get_naver_financial_data(code_num):
       if per_match and per_match.group(1) != "-": res["per"] = f"{per_match.group(1)}배"
       pbr_match = re.search(r'<em id="_pbr">([\d\.\-]+)</em>', text)
       if pbr_match and pbr_match.group(1) != "-": res["pbr"] = f"{pbr_match.group(1)}배"
-      fper_match = re.search(r'<em id="_cper">([\d\.\-]+)</em>', text)
-      if fper_match and fper_match.group(1) != "-": res["forward_per"] = f"{fper_match.group(1)}배"
   except Exception:
     pass
   return res
@@ -255,9 +220,7 @@ def get_ticker_symbol_and_code(user_input):
   }
   if cleaned in mapping:
     return mapping[cleaned]
-  
-  # 기본 기본값 매핑
-  return f"005930.KS", "005930"
+  return "005930.KS", "005930"
 
 @st.cache_data(ttl=3600)
 def translate_to_ko(text):
@@ -294,8 +257,8 @@ with tab_analysis:
         with st.spinner("데이터 분석 중..."):
           df, info = fetch_stock_history(ticker_symbol)
 
-        if df.empty:
-          st.error("⚠️ 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해주세요. (야후/네이버 일시적 차단 가능성)")
+        if df.empty or len(df) < 5:
+          st.error("⚠️ 외부 서버(야후 파이낸스/네이버)에서 요청을 일시적으로 제한(Rate Limit)했거나 데이터를 찾을 수 없습니다. 1~2분 뒤에 다시 시도해 주세요.")
         else:
           current_price = int(df["Close"].iloc[-1])
           prev_price = int(df["Close"].iloc[-2])
@@ -332,7 +295,7 @@ with tab_analysis:
           render_kakao_adfit()
 
       except Exception as e:
-        st.error(f"⚠️ 오류 발생: {e}")
+        st.error(f"⚠️ 데이터 처리 중 예외가 발생했습니다: {e}")
 
 with tab_board:
   st.subheader("💬 주주 오픈 토론방")
