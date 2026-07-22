@@ -1,2 +1,2 @@
-openai
 streamlit
+huggingface_hub
