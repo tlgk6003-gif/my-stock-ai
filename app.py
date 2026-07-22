@@ -1,6 +1,5 @@
 import datetime
 import json
-import os
 import re
 import urllib.parse
 import xml.etree.ElementTree as ET
@@ -16,26 +15,37 @@ import yfinance as yf
 # =============================================================================
 COUPANG_LINK = "https://link.coupang.com/a/XXXXXX"  # <--- 본인 파트너스 단축 URL 붙여넣기
 
-# 게시판 데이터 저장 파일 경로
-BOARD_FILE = "board_data.json"
+# Firebase 실시간 데이터베이스 URL (정상 주소 반영 완료)
+FIREBASE_URL = "https://mystockcommunity-dd967-default-rtdb.firebaseio.com/"
 
 
 # -----------------------------------------------------------------------------
-# 게시판 데이터 로드 및 저장 함수
+# Firebase 데이터베이스 연동 함수 (게시글 영구 저장)
 # -----------------------------------------------------------------------------
 def load_posts():
-  if os.path.exists(BOARD_FILE):
-    try:
-      with open(BOARD_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
-    except Exception:
-      return []
+  try:
+    response = requests.get(f"{FIREBASE_URL}posts.json", timeout=5)
+    if response.status_code == 200:
+      data = response.json()
+      if data is not None:
+        if isinstance(data, dict):
+          posts_list = list(data.values())
+        elif isinstance(data, list):
+          posts_list = [p for p in data if p is not None]
+        else:
+          posts_list = []
+        posts_list.sort(key=lambda x: x.get("id", 0), reverse=True)
+        return posts_list
+  except Exception:
+    pass
   return []
 
 
-def save_posts(posts):
-  with open(BOARD_FILE, "w", encoding="utf-8") as f:
-    json.dump(posts, f, ensure_ascii=False, indent=4)
+def save_posts_to_firebase(posts):
+  try:
+    requests.put(f"{FIREBASE_URL}posts.json", json=posts, timeout=5)
+  except Exception:
+    pass
 
 
 # -----------------------------------------------------------------------------
@@ -633,7 +643,7 @@ with tab_analysis:
 
 
 # =============================================================================
-# 🟢 TAB 2: 자유 게시판 커뮤니티 화면 (자체 DB 기능)
+# 🟢 TAB 2: 자유 게시판 커뮤니티 화면 (Firebase DB 연동)
 # =============================================================================
 with tab_board:
   st.subheader("💬 주주 자유 토론 게시판")
@@ -668,19 +678,19 @@ with tab_board:
           st.error("⚠️ 닉네임, 비밀번호, 제목, 내용을 모두 입력해 주세요!")
         else:
           posts = load_posts()
+          new_id = (max([p.get("id", 0) for p in posts]) + 1) if posts else 1
           new_post = {
-              "id": len(posts) + 1,
+              "id": new_id,
               "author": author,
               "password": password,
               "category": category,
               "title": title,
               "content": content,
               "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-              "comments": [],
           }
-          posts.insert(0, new_post)  # 최신글이 맨 위로 오도록 추가
-          save_posts(posts)
-          st.success("✅ 게시글이 성공적으로 등록되었습니다!")
+          posts.insert(0, new_post)
+          save_posts_to_firebase(posts)
+          st.success("✅ 게시글이 성공적으로 영구 등록되었습니다!")
           st.rerun()
 
   st.markdown("---")
@@ -715,9 +725,9 @@ with tab_board:
             "작성 시 입력한 비밀번호", type="password", key=f"pw_{post['id']}"
         )
         if st.button("확인 및 삭제", key=f"del_{post['id']}"):
-          if del_pw == post.get("password"):
+          if del_pw == str(post.get("password")):
             posts.pop(idx)
-            save_posts(posts)
+            save_posts_to_firebase(posts)
             st.success("삭제되었습니다!")
             st.rerun()
           else:
