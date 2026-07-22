@@ -65,7 +65,8 @@ st.markdown(
         border-collapse: collapse;
         margin: 15px 0;
         font-size: 0.95em;
-        border-radius: 8px overflow: hidden;
+        border-radius: 8px;
+        overflow: hidden;
     }
     .styled-table thead tr {
         background-color: #21262D;
@@ -98,7 +99,7 @@ st.markdown(
     }
     </style>
 """,
-    unsafe_allow_keywords=True,
+    unsafe_allow_html=True,
 )
 
 # 헤더 영역
@@ -120,9 +121,8 @@ stock_input = st.text_input(
 def get_ticker_symbol(user_input):
   user_input = user_input.strip()
   if user_input.isdigit() and len(user_input) == 6:
-    return f"{user_input}.KS"  # 기본적으로 코스피로 지정 후 예외처리 가능
+    return f"{user_input}.KS"
 
-  # 주요 종목 기본 매핑 (코스피 & 코스닥)
   mapping = {
       "삼성전자": "005930.KS",
       "SK하이닉스": "000660.KS",
@@ -140,7 +140,6 @@ def get_ticker_symbol(user_input):
   if user_input in mapping:
     return mapping[user_input]
 
-  # 기본값 fallback: 코스피로 조회 시도
   return f"{user_input}.KS"
 
 
@@ -159,9 +158,8 @@ if st.button("🚀 실시간 종합 분석 시작", type="primary", use_containe
     ):
       try:
         stock = yf.Ticker(ticker_symbol)
-        df = stock.history(period="6mo")  # 6개월치 데이터 수집
+        df = stock.history(period="6mo")
 
-        # 코스피로 실패했을 경우 코스닥(.KQ)으로 다시 시도
         if df.empty and ticker_symbol.endswith(".KS"):
           ticker_symbol = ticker_symbol.replace(".KS", ".KQ")
           stock = yf.Ticker(ticker_symbol)
@@ -189,16 +187,16 @@ if st.button("🚀 실시간 종합 분석 시작", type="primary", use_containe
 
           # 모의투자 세팅값 및 비중 계산
           buy_1 = current_price
-          buy_2 = int(current_price * 0.97)  # -3% 조정 시
-          target_price = int(current_price * 1.15)  # +15% 목표
-          stop_loss = int(current_price * 0.95)  # -5% 손절
+          buy_2 = int(current_price * 0.97)
+          target_price = int(current_price * 1.15)
+          stop_loss = int(current_price * 0.95)
 
           st.success(
               f"✨ '{stock_input}' 실시간 데이터 연동 및 정밀 분석 완료!"
           )
 
           # -----------------------------------------------------------------------------
-          # 4. 실시간 주요 지표 카드 (고급형)
+          # 4. 실시간 주요 지표 카드
           # -----------------------------------------------------------------------------
           col1, col2, col3, col4 = st.columns(4)
 
@@ -272,7 +270,6 @@ if st.button("🚀 실시간 종합 분석 시작", type="primary", use_containe
                 f"[{stock_input}] 실시간 캔들 차트 및 이동평균선 (최근 6개월)"
             )
 
-            # 서브플롯 생성 (주가 차트 + 거래량 차트)
             fig = make_subplots(
                 rows=2,
                 cols=1,
@@ -281,7 +278,6 @@ if st.button("🚀 실시간 종합 분석 시작", type="primary", use_containe
                 row_heights=[0.75, 0.25],
             )
 
-            # 캔들스틱 추가
             fig.add_trace(
                 go.Candlestick(
                     x=df.index,
@@ -290,14 +286,13 @@ if st.button("🚀 실시간 종합 분석 시작", type="primary", use_containe
                     low=df["Low"],
                     close=df["Close"],
                     name="주가 (OHLC)",
-                    increasing_line_color="#E53E3E",  # 한국 기준 상승=빨강
-                    decreasing_line_color="#3182CE",  # 한국 기준 하락=파랑
+                    increasing_line_color="#E53E3E",
+                    decreasing_line_color="#3182CE",
                 ),
                 row=1,
                 col=1,
             )
 
-            # 이동평균선 추가
             fig.add_trace(
                 go.Scatter(
                     x=df.index,
@@ -329,7 +324,6 @@ if st.button("🚀 실시간 종합 분석 시작", type="primary", use_containe
                 col=1,
             )
 
-            # 거래량 바 추가
             colors = [
                 "#E53E3E" if c >= o else "#3182CE"
                 for c, o in zip(df["Close"], df["Open"])
@@ -345,7 +339,6 @@ if st.button("🚀 실시간 종합 분석 시작", type="primary", use_containe
                 col=1,
             )
 
-            # 차트 레이아웃 스타일링
             fig.update_layout(
                 template="plotly_dark",
                 paper_bgcolor="rgba(0,0,0,0)",
@@ -380,7 +373,7 @@ if st.button("🚀 실시간 종합 분석 시작", type="primary", use_containe
             <div class="custom-card bull">
                 <h4 style="margin:0 0 8px 0; color:#E53E3E;">💡 증권사 애널리스트 (기업 가치 및 펀더멘털)</h4>
                 <p style="margin:0; color:#C9D1D9; line-height:1.6;">
-                "<b>{stock_input}</b>의 현재 주가 <b>{current_price:,}원</b>은 12개월 선행 실적 대비 밸류에이션 부담이 적은 구간입니다. 
+                "<b>{stock_input}</b>의 현재 주가 <b>{current_price:,}원</b>은 밸류에이션 부담이 적은 구간입니다. 
                 하단 지지선이 견고하게 구축되어 있어, 중장기적 시각에서 분할 매수 관점으로 접근하기에 매우 매력적인 지점입니다."
                 </p>
             </div>
@@ -412,7 +405,6 @@ if st.button("🚀 실시간 종합 분석 시작", type="primary", use_containe
                 " 가격 및 **포트폴리오 자금 배분(비중)** 전략입니다."
             )
 
-            # 포트폴리오 비중 표
             st.markdown(
                 f"""
             <table class="styled-table">
@@ -490,7 +482,7 @@ if st.button("🚀 실시간 종합 분석 시작", type="primary", use_containe
                   "ℹ️ 현재 연동된 최근 주요 뉴스 데이터가 없거나 수집 중입니다."
               )
             else:
-              for item in news_list[:7]:  # 상위 7개 뉴스 표시
+              for item in news_list[:7]:
                 title = item.get("title", "제목 없음")
                 publisher = item.get("publisher", "언론사 정보 없음")
                 link = item.get("link", "#")
