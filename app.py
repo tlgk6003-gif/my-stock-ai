@@ -69,10 +69,9 @@ def load_users():
   return {}
 
 
-def save_user_to_firebase(username, user_data):
+def save_user_to_firebase(user_id, user_data):
   try:
-    # Firebase 키로 사용할 수 없는 특수문자 방지 가공
-    safe_key = username.replace(".", "_").replace("#", "_").replace("$", "_")
+    safe_key = user_id.replace(".", "_").replace("#", "_").replace("$", "_")
     requests.put(
         f"{FIREBASE_URL}users/{safe_key}.json", json=user_data, timeout=5
     )
@@ -249,12 +248,14 @@ st.markdown(
 )
 
 # -----------------------------------------------------------------------------
-# 세션 상태 초기화 (로그인 여부 관리)
+# 세션 상태 초기화 (로그인 여부 및 닉네임 관리)
 # -----------------------------------------------------------------------------
 if "logged_in" not in st.session_state:
   st.session_state["logged_in"] = False
-if "username" not in st.session_state:
-  st.session_state["username"] = ""
+if "user_id" not in st.session_state:
+  st.session_state["user_id"] = ""
+if "nickname" not in st.session_state:
+  st.session_state["nickname"] = ""
 
 # 사이드바를 통한 회원가입 및 로그인 창 구현
 with st.sidebar:
@@ -265,7 +266,7 @@ with st.sidebar:
 
     if auth_mode == "로그인":
       with st.form("login_form"):
-        login_user = st.text_input("아이디 (닉네임)")
+        login_id = st.text_input("아이디")
         login_pw = st.text_input("비밀번호", type="password")
         login_btn = st.form_submit_button(
             "로그인", use_container_width=True, type="primary"
@@ -274,23 +275,25 @@ with st.sidebar:
         if login_btn:
           users_db = load_users()
           safe_key = (
-              login_user.replace(".", "_")
-              .replace("#", "_")
-              .replace("$", "_")
+              login_id.replace(".", "_").replace("#", "_").replace("$", "_")
           )
           if safe_key in users_db and users_db[safe_key]["password"] == hash_password(
               login_pw
           ):
             st.session_state["logged_in"] = True
-            st.session_state["username"] = login_user
-            st.success(f"환영합니다, {login_user}님!")
+            st.session_state["user_id"] = login_id
+            st.session_state["nickname"] = users_db[safe_key].get(
+                "nickname", login_id
+            )
+            st.success(f"환영합니다, {st.session_state['nickname']}님!")
             st.rerun()
           else:
             st.error("아이디 또는 비밀번호가 일치하지 않습니다.")
 
     else:
       with st.form("signup_form"):
-        new_user = st.text_input("사용할 아이디 (닉네임)")
+        new_id = st.text_input("사용할 아이디")
+        new_nickname = st.text_input("커뮤니티 닉네임 (표시 이름)")
         new_pw = st.text_input("비밀번호", type="password")
         new_pw_check = st.text_input("비밀번호 확인", type="password")
         signup_btn = st.form_submit_button(
@@ -298,44 +301,44 @@ with st.sidebar:
         )
 
         if signup_btn:
-          if not new_user or not new_pw:
-            st.warning("아이디와 비밀번호를 모두 입력해 주세요.")
+          if not new_id or not new_nickname or not new_pw:
+            st.warning("아이디, 닉네임, 비밀번호를 모두 입력해 주세요.")
           elif new_pw != new_pw_check:
             st.error("비밀번호가 일치하지 않습니다.")
           else:
             users_db = load_users()
             safe_key = (
-                new_user.replace(".", "_")
-                .replace("#", "_")
-                .replace("$", "_")
+                new_id.replace(".", "_").replace("#", "_").replace("$", "_")
             )
             if safe_key in users_db:
               st.error("이미 존재하는 아이디입니다.")
             else:
               user_data = {
-                  "username": new_user,
+                  "user_id": new_id,
+                  "nickname": new_nickname,
                   "password": hash_password(new_pw),
                   "joined_date": datetime.datetime.now().strftime(
                       "%Y-%m-%d %H:%M"
                   ),
               }
-              if save_user_to_firebase(new_user, user_data):
+              if save_user_to_firebase(new_id, user_data):
                 st.success("회원가입 완료! 로그인해 주세요.")
               else:
                 st.error("회원가입 중 오류가 발생했습니다.")
   else:
     st.markdown(
-        f"👤 현재 접속 중: <b style='color:#38bdf8;'>{st.session_state['username']}</b>님",
+        f"👤 접속 닉네임: <b style='color:#38bdf8;'>{st.session_state['nickname']}</b><br><span style='font-size:0.75rem; color:#8b949e;'>ID: {st.session_state['user_id']}</span>",
         unsafe_allow_html=True,
     )
     if st.button("로그아웃", use_container_width=True):
       st.session_state["logged_in"] = False
-      st.session_state["username"] = ""
+      st.session_state["user_id"] = ""
+      st.session_state["nickname"] = ""
       st.rerun()
 
   st.markdown("---")
   st.markdown(
-      "<div style='font-size:0.8rem; color:#8b949e;'>⚡ AI 주식분석 플랫폼 v2.5<br>© 2026 Stock Community</div>",
+      "<div style='font-size:0.8rem; color:#8b949e;'>⚡ AI 주식분석 플랫폼 v2.6<br>© 2026 Stock Community</div>",
       unsafe_allow_html=True,
   )
 
@@ -355,8 +358,30 @@ tab_analysis, tab_board = st.tabs(
 )
 
 # -----------------------------------------------------------------------------
-# 2. 크롤링 및 유틸리티 함수
+# 2. 크롤링 및 유틸리티 함수 (종목명 ➔ 코스피/코스닥 정확한 자동 검색)
 # -----------------------------------------------------------------------------
+@st.cache_data(ttl=3600)
+def search_naver_stock_code(query):
+  """네이버 금융 자동완성 API를 활용해 한글 종목명으로 6자리 종목코드 검색"""
+  try:
+    url = f"https://ac.finance.naver.com/ac?q={urllib.parse.quote(query)}&target=stock"
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        )
+    }
+    res = requests.get(url, headers=headers, timeout=3)
+    if res.status_code == 200:
+      data = res.json()
+      items = data.get("items", [])
+      if items and len(items[0]) > 0:
+        stock_code = items[0][0]
+        return stock_code
+  except Exception:
+    pass
+  return None
+
+
 @st.cache_data(ttl=300)
 def get_naver_financial_data(code_num):
   url = f"https://finance.naver.com/item/main.naver?code={code_num}"
@@ -445,9 +470,25 @@ def fetch_stock_history(ticker_symbol):
 
 def get_ticker_symbol_and_code(user_input):
   user_input = user_input.strip()
-  if user_input.isdigit() and len(user_input) == 6:
-    return f"{user_input}.KQ", user_input
 
+  # 1. 사용자가 6자리 숫자로 입력한 경우
+  if user_input.isdigit() and len(user_input) == 6:
+    test_url = f"https://finance.naver.com/item/main.naver?code={user_input}"
+    try:
+      headers = {
+          "User-Agent": (
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+          )
+      }
+      resp = requests.get(test_url, headers=headers, timeout=3)
+      if "KOSDAQ" in resp.text:
+        return f"{user_input}.KQ", user_input
+      else:
+        return f"{user_input}.KS", user_input
+    except:
+      return f"{user_input}.KQ", user_input
+
+  # 2. 주요 종목 하드코딩 매핑
   mapping = {
       "삼성전자": ("005930.KS", "005930"),
       "SK하이닉스": ("000660.KS", "000660"),
@@ -467,6 +508,25 @@ def get_ticker_symbol_and_code(user_input):
   if user_input in mapping:
     return mapping[user_input]
 
+  # 3. 네이버 금융 자동완성 API를 통한 한글 종목명 코드로 변환 및 코스닥(.KQ)/코스피(.KS) 자동 판별
+  found_code = search_naver_stock_code(user_input)
+  if found_code:
+    test_url = f"https://finance.naver.com/item/main.naver?code={found_code}"
+    try:
+      headers = {
+          "User-Agent": (
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+          )
+      }
+      resp = requests.get(test_url, headers=headers, timeout=3)
+      if "KOSDAQ" in resp.text:
+        return f"{found_code}.KQ", found_code
+      else:
+        return f"{found_code}.KS", found_code
+    except:
+      return f"{found_code}.KQ", found_code
+
+  # 4. 실패 시 기본 값 반환
   return f"{user_input}.KQ", user_input
 
 
@@ -564,7 +624,7 @@ with tab_analysis:
 
   stock_input = st.text_input(
       "🔍 분석 대상 종목명 또는 6자리 종목코드를 입력하세요:",
-      placeholder="예: 삼성전자, 에이스테크, 필에너지, 088800",
+      placeholder="예: 에코프로비엠, 알테오젠, 삼성전자, 247540",
   )
 
   if st.button(
@@ -923,7 +983,7 @@ with tab_board:
         col_f1, _ = st.columns([2, 4])
         category = col_f1.selectbox(
             "관련 종목/분류",
-            ["자유토론", "삼성전자", "에이스테크", "필에너지", "국장종목", "미장종목"],
+            ["자유토론", "삼성전자", "에코프로비엠", "알테오젠", "국장종목", "미장종목"],
         )
 
         title = st.text_input("글 제목", placeholder="제목을 입력하세요")
@@ -943,7 +1003,9 @@ with tab_board:
             new_id = (max([p.get("id", 0) for p in posts]) + 1) if posts else 1
             new_post = {
                 "id": new_id,
-                "author": st.session_state["username"],  # 로그인된 계정 이름 사용
+                "author": st.session_state[
+                    "nickname"
+                ],  # 커뮤니티에는 닉네임으로 표시
                 "category": category,
                 "title": title,
                 "content": content,
@@ -958,7 +1020,7 @@ with tab_board:
 
   st.markdown("---")
 
-  # 2. 게시글 목록 출력
+  # 게시글 목록 출력
   posts = load_posts()
 
   if not posts:
@@ -992,10 +1054,10 @@ with tab_board:
           st.rerun()
 
       with col_act2:
-        # 본인이 작성한 글이거나 로그인 계정이 일치할 때만 삭제 허용
+        # 본인이 작성한 글일 때만 삭제 허용 (닉네임 기준 체크)
         if (
             st.session_state["logged_in"]
-            and st.session_state["username"] == post.get("author")
+            and st.session_state["nickname"] == post.get("author")
         ):
           if st.button("🗑️ 내 글 삭제", key=f"del_{post['id']}"):
             posts.pop(idx)
@@ -1033,7 +1095,7 @@ with tab_board:
                 st.warning("내용을 입력해 주세요.")
               else:
                 new_comment = {
-                    "author": st.session_state["username"],
+                    "author": st.session_state["nickname"],
                     "content": c_content,
                     "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
                 }
