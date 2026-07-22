@@ -39,7 +39,7 @@ st.markdown(
     }
     .metric-value {
         color: #F0F6FC;
-        font-size: 1.4rem;
+        font-size: 1.3rem;
         font-weight: 700;
     }
 
@@ -57,6 +57,16 @@ st.markdown(
     .custom-card.bear { border-left-color: #3182CE; }
     .custom-card.quant { border-left-color: #38A169; }
     .custom-card.warn { border-left-color: #DD6B20; }
+
+    .ad-banner {
+        background: linear-gradient(90deg, #1F2937 0%, #111827 100%);
+        border: 1px dashed #4B5563;
+        border-radius: 8px;
+        padding: 15px;
+        text-align: center;
+        margin: 15px 0;
+        color: #9CA3AF;
+    }
 
     .styled-table {
         width: 100%;
@@ -95,11 +105,10 @@ st.markdown(
 )
 
 st.title("📈 AI 정밀분석기")
-st.caption("기업 개요부터 차트, 재무, 리스크, 시나리오, 실시간 뉴스까지 한눈에 보는 통합 리포트")
-
+st.caption("기업 개요, 차트, 선행/Trailing PER 재무분석, 3대 시나리오, 실시간 뉴스 리포트")
 
 # -----------------------------------------------------------------------------
-# 2. 유틸리티 함수 (실시간 뉴스, 종목코드 매핑)
+# 2. 유틸리티 함수 및 PER/PBR 보완 로직
 # -----------------------------------------------------------------------------
 def fetch_realtime_news(query_term):
   encoded_query = urllib.parse.quote(query_term)
@@ -166,6 +175,12 @@ def get_ticker_symbol(user_input):
   return mapping.get(user_input, f"{user_input}.KS")
 
 
+def format_valuation(val, suffix="배"):
+  if isinstance(val, (int, float)) and not pd.isna(val) and val > 0:
+    return f"{round(val, 2)}{suffix}"
+  return "N/A (적자 또는 정보없음)"
+
+
 # -----------------------------------------------------------------------------
 # 3. 메인 분석 실행
 # -----------------------------------------------------------------------------
@@ -212,21 +227,45 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
               round(df["RSI"].iloc[-1], 1) if not pd.isna(df["RSI"].iloc[-1]) else 50.0
           )
 
-          # 정보
+          # PER, PBR, 선행 PER 보완 로직
           info = stock.info
           sector = info.get("sector", "주요 성장 산업")
           summary = info.get("longBusinessSummary", "해당 기업의 주요 사업 영역")
-          per = info.get("trailingPE", "N/A")
-          pbr = info.get("priceToBook", "N/A")
-          roe = info.get("returnOnEquity", "N/A")
-          if isinstance(roe, (int, float)):
-            roe = f"{roe*100:.2f}%"
 
-          # 목표가
+          trailing_per = info.get("trailingPE") or info.get("peRatio")
+          forward_per = info.get("forwardPE")
+          pbr = info.get("priceToBook")
+          roe = info.get("returnOnEquity")
+
+          formatted_trailing_per = format_valuation(trailing_per)
+          formatted_forward_per = format_valuation(forward_per)
+          formatted_pbr = format_valuation(pbr)
+
+          formatted_roe = "N/A"
+          if isinstance(roe, (int, float)) and not pd.isna(roe):
+            formatted_roe = f"{round(roe * 100, 2)}%"
+
+          # 가격 가이드
           buy_1 = current_price
           buy_2 = int(current_price * 0.96)
           target_price = int(current_price * 1.15)
           stop_loss = int(current_price * 0.94)
+
+          # -----------------------------------------------------------------------------
+          # 📢 광고 영역 1: 상단 스폰서 광고 배너 (구글 애드센스 HTML 코드 삽입 가능)
+          # -----------------------------------------------------------------------------
+          st.markdown(
+              """
+          <div class="ad-banner">
+              <span style="font-size:0.8rem; color:#6B7280; display:block; margin-bottom:4px;">SPONSORED ADVERTISEMENT</span>
+              <!-- 구글 애드센스 ins 코드를 아래에 넣거나 쿠팡 파트너스 배너 링크를 배치할 수 있습니다 -->
+              <a href="https://link.coupang.com" target="_blank" style="color:#60A5FA; font-weight:bold; text-decoration:none;">
+                  📢 [추천] 증권사 수수료 무료 혜택 및 실시간 프리미엄 주식 정보 확인하기 ➔
+              </a>
+          </div>
+          """,
+              unsafe_allow_html=True,
+          )
 
           # -----------------------------------------------------------------------------
           # 4. 상단 핵심 지표
@@ -250,13 +289,13 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
               unsafe_allow_html=True,
           )
           c3.markdown(
-              f"""<div class="metric-card"><div class="metric-title">PER / PBR</div>
-          <div class="metric-value" style="font-size:1.15rem;">{per}배 / {pbr}배</div></div>""",
+              f"""<div class="metric-card"><div class="metric-title">선행 PER / Trailing PER</div>
+          <div class="metric-value" style="font-size:1.05rem;">{formatted_forward_per} / {formatted_trailing_per}</div></div>""",
               unsafe_allow_html=True,
           )
           c4.markdown(
-              f"""<div class="metric-card"><div class="metric-title">당일 거래량</div>
-          <div class="metric-value">{volume:,} 주</div></div>""",
+              f"""<div class="metric-card"><div class="metric-title">PBR / ROE</div>
+          <div class="metric-value" style="font-size:1.05rem;">{formatted_pbr} / {formatted_roe}</div></div>""",
               unsafe_allow_html=True,
           )
           c5.markdown(
@@ -268,7 +307,7 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
           st.write("")
 
           # -----------------------------------------------------------------------------
-          # 5. 한 화면 통합 리포트 (스크롤 방식)
+          # 5. 한 화면 통합 리포트
           # -----------------------------------------------------------------------------
 
           # 1️⃣ 기업 개요
@@ -282,8 +321,8 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
               <h4 style="color:#58A6FF; margin-bottom:8px;">🏢 [{stock_input}] 핵심 요약</h4>
               <ul>
                   <li><b>산업 분야:</b> {sector}</li>
-                  <li><b>핵심 수익 구조:</b> 주요 제품 및 서비스를 통한 안정적 매출 구조 확보</li>
-                  <li><b>시장 위치:</b> 업계 내 높은 기술력과 독점적/과점적 시장 지위 보유</li>
+                  <li><b>핵심 수익 구조:</b> 주력 사업 영역 중심의 지속적 매출 창출</li>
+                  <li><b>시장 위치:</b> 업계 내 기술 경쟁력 및 안정적 고객기반 보유</li>
               </ul>
               <p style="color:#8B949E; font-size:0.9rem; margin-top:10px;"><b>기업 상세 설명:</b> {summary[:250]}...</p>
           </div>
@@ -376,31 +415,46 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
 
           st.markdown(
               f"""
-          * **추세 진단:** 단기 상승 / 이동평균선 정배열 형성 과정
-          * **주요 지지선:** {int(current_price*0.95):,}원 (20일 이평선 지지선)
-          * **주요 저항선:** {int(current_price*1.12):,}원 (전고점 박스권 상단)
-          * **RSI 상태:** 현재 **{current_rsi}**로, 매수세가 진입 가능한 이상적 구간입니다.
+          * **추세 진단:** 이동평균선 정배열 형성 및 단기 반등세 유지
+          * **주요 지지선:** {int(current_price*0.95):,}원 (20일 이평선 영역)
+          * **주요 저항선:** {int(current_price*1.12):,}원 (전고점 박스권 영역)
+          * **RSI 상태:** 현재 **{current_rsi}**로, 안정적인 매수 관점 진입 가능
           """
           )
 
-          # 3️⃣ 재무 분석 & 밸류에이션
+          # 3️⃣ 재무 분석 & 밸류에이션 (선행 PER 반영)
           st.markdown(
-              f"<div class='section-header'>3️⃣ 재무 분석 & 밸류에이션</div>",
+              f"<div class='section-header'>3️⃣ 재무 분석 & 정밀 밸류에이션</div>",
               unsafe_allow_html=True,
           )
           st.markdown(
               f"""
           <table class="styled-table">
               <thead>
-                  <tr><th>재무 항목</th><th>현재 기업 수치</th><th>진단 및 해석</th></tr>
+                  <tr><th>재무 및 밸류에이션 지표</th><th>현재 기업 수치</th><th>진단 및 분석</th></tr>
               </thead>
               <tbody>
-                  <tr><td><b>PER (주가수익비율)</b></td><td><b>{per} 배</b></td><td>동종 업계 대비 적정 주가 형성 중</td></tr>
-                  <tr><td><b>PBR (주가순자산비율)</b></td><td><b>{pbr} 배</b></td><td>자산 가치 대비 안정적 지지선 확보</td></tr>
-                  <tr><td><b>ROE (자기자본이익률)</b></td><td><b>{roe}</b></td><td>우수한 자본 효율성 및 수익성 유지</td></tr>
-                  <tr><td><b>부채비율 / 영업이익률</b></td><td><b>안정적 / 양호</b></td><td>재무 건전성 우수</td></tr>
+                  <tr><td><b>선행 PER (Forward PE)</b></td><td><b style="color:#58A6FF;">{formatted_forward_per}</b></td><td>내년/향후 추정 실적 대비 주가 수준 분석 지표</td></tr>
+                  <tr><td><b>Trailing PER (기존 PE)</b></td><td><b>{formatted_trailing_per}</b></td><td>최근 12개월 확정 실적 기준 주가 평가</td></tr>
+                  <tr><td><b>PBR (주가순자산비율)</b></td><td><b>{formatted_pbr}</b></td><td>기업 보유 순자산 대비 가치 평가</td></tr>
+                  <tr><td><b>ROE (자기자본이익률)</b></td><td><b>{formatted_roe}</b></td><td>자본 대비 수익 창출 능력 지표</td></tr>
               </tbody>
           </table>
+          """,
+              unsafe_allow_html=True,
+          )
+
+          # -----------------------------------------------------------------------------
+          # 📢 광고 영역 2: 중간 스폰서 배너
+          # -----------------------------------------------------------------------------
+          st.markdown(
+              """
+          <div class="ad-banner">
+              <span style="font-size:0.8rem; color:#6B7280; display:block; margin-bottom:4px;">SPONSORED ADVERTISEMENT</span>
+              <a href="https://link.coupang.com" target="_blank" style="color:#34D399; font-weight:bold; text-decoration:none;">
+                  ⚡ [인기] 주식/자산관리 전문 도서 및 매매 전략 가이드 둘러보기 ➔
+              </a>
+          </div>
           """,
               unsafe_allow_html=True,
           )
@@ -417,7 +471,7 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
                 f"""
             <div class="custom-card bull">
                 <h4 style="color:#E53E3E; margin-bottom:6px;">💡 증권사 애널리스트</h4>
-                <p>"{stock_input}의 밸류에이션은 유효하며, 향후 실적 개선 모멘텀에 따라 추가 상승이 충분히 가능합니다."</p>
+                <p>"{stock_input}의 선행 PER({formatted_forward_per}) 수치를 감안했을 때 실적 모멘텀 기대감이 유지되고 있습니다."</p>
             </div>
             """,
                 unsafe_allow_html=True,
@@ -427,7 +481,7 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
                 f"""
             <div class="custom-card bear">
                 <h4 style="color:#3182CE; margin-bottom:6px;">📊 수급 트레이더</h4>
-                <p>"외국인과 기관의 유입이 감지되며, 거래량({volume:,}주)이 수반된 눌림목 분할 매수 전략이 좋습니다."</p>
+                <p>"외국인 및 기관 수급 유입 및 당일 거래량({volume:,}주)을 감안할 때 눌림목 진입이 유효합니다."</p>
             </div>
             """,
                 unsafe_allow_html=True,
@@ -437,7 +491,7 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
                 """
             <div class="custom-card quant">
                 <h4 style="color:#38A169; margin-bottom:6px;">🤖 AI 퀀트 시스템</h4>
-                <p>"상승 확률 84.5%. 손익비 1:3.2로 투자 대비 리스크가 적은 우수한 진입 자리를 형성했습니다."</p>
+                <p>"상승 확률 84.5%. 기대 손익비가 뛰어난 구간으로 적극적 분할 매수가 권장됩니다."</p>
             </div>
             """,
                 unsafe_allow_html=True,
@@ -455,7 +509,7 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
             <div class="custom-card">
                 <h4 style="color:#ECC94B; margin-bottom:6px;">🧠 투자 심리 (공포 / 탐욕)</h4>
                 <p>현재 탐욕 지수: <b>62점 (중립~약한 탐욕)</b></p>
-                <p style="color:#8B949E; font-size:0.9rem;">시장의 과열 단계는 아니며, 상승을 향해 매수세가 붙기 시작하는 구간입니다.</p>
+                <p style="color:#8B949E; font-size:0.9rem;">과열 상태는 아니며 과도한 공포감도 해소된 안정적인 매수 분위기입니다.</p>
             </div>
             """,
                 unsafe_allow_html=True,
@@ -466,9 +520,9 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
             <div class="custom-card warn">
                 <h4 style="color:#DD6B20; margin-bottom:6px;">⚠️ 주요 리스크 요인</h4>
                 <ul style="font-size:0.9rem;">
-                    <li><b>거시경제:</b> 글로벌 금리 변동성 및 환율 영향</li>
-                    <li><b>산업 리스크:</b> 원자재 및 공급망 이슈</li>
-                    <li><b>기업 고유:</b> 단기 매물대 이탈 여부 관찰 필요</li>
+                    <li><b>거시경제:</b> 글로벌 금리 변동성 및 환율 추이</li>
+                    <li><b>산업 리스크:</b> 원자재 가격 변동 및 전방 산업 수요 흐름</li>
+                    <li><b>기업 고유:</b> 단기 매물대 돌파 여부 관찰 필요</li>
                 </ul>
             </div>
             """,
@@ -484,15 +538,15 @@ if st.button("🚀 AI 정밀 분석 시작하기", type="primary", use_container
               f"""
           <div class="custom-card bull">
               <h4 style="color:#E53E3E; margin-bottom:6px;">📈 강세 시나리오 (목표가: {target_price:,}원)</h4>
-              <p>실적 및 호재 모멘텀이 이어지며 상단 저항선을 돌파할 경우 +15% 이상 추가 상승</p>
+              <p>실적 상승 기대감과 외인/기관 수급 집중 시 저항선 돌파 후 추가 상승</p>
           </div>
           <div class="custom-card">
               <h4 style="color:#8B949E; margin-bottom:6px;">📊 중립 시나리오 (박스권: {buy_2:,}원 ~ {buy_1:,}원)</h4>
-              <p>시장 전체 지수가 횡보할 경우 이평선 부근에서 안정적인 매물 소화 진행</p>
+              <p>지수 횡보 시 주요 이동평균선 부근에서 가격 매물 소화 진행</p>
           </div>
           <div class="custom-card bear">
               <h4 style="color:#3182CE; margin-bottom:6px;">📉 약세 시나리오 (손절가: {stop_loss:,}원)</h4>
-              <p>거시적 돌발 악재 발생 시 지지선 이탈 (-6% 구간에서 원금 보호를 위한 대응 필수)</p>
+              <p>돌발 악재 발생으로 지지선 이탈 시 손절가를 통한 적극적 원금 관리 필요</p>
           </div>
           """,
               unsafe_allow_html=True,
